@@ -1,0 +1,14 @@
+[package]
+name = "tokio-vsock"
+version = "0.1.0"
+authors = ["fsyncd"]
+description = "Asynchronous Virtio socket support for Rust."
+repository = "https://github.com/fsyncd/tokio-vsock"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+mio = "0.6.19"
+futures = "0.1.29"
+tokio = "0.1.22"
+vsock = "0.1.0"
