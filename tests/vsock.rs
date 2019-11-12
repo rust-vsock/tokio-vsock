@@ -18,10 +18,10 @@ use futures::future::err;
 use futures::{Future, Stream};
 use hyper::client::Client;
 use hyper::{Body, Method, Request, Response, Uri as HyperUri};
+use hyper_vsock::{Uri, VsockConnector};
 use nix::sys::socket::{SockAddr, VsockAddr};
 use std::io;
 use tokio::runtime::Runtime;
-use hyper_vsock::{Uri, VsockConnector};
 
 /// Make a simple GET request over vsock to the test server.
 /// Further testing is required, however this test, combined with the server
