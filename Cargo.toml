@@ -2,13 +2,22 @@
 name = "tokio-vsock"
 version = "0.1.0"
 authors = ["fsyncd"]
-description = "Asynchronous Virtio socket support for Rust."
+description = "Asynchronous Virtio socket support for Rust"
 repository = "https://github.com/fsyncd/tokio-vsock"
 license = "Apache-2.0"
 edition = "2018"
+exclude = ["test_fixture"]
 
 [dependencies]
-mio = "0.6.19"
+bytes = "0.4.12"
 futures = "0.1.29"
+iovec = "0.1.4"
+libc = "0.2.65"
+mio = "0.6.19"
+nix = "0.15.0"
 tokio = "0.1.22"
-vsock = "0.1.0"
+vsock = "0.1.4"
+
+[dev-dependencies]
+hyper = "0.12.35"
+hyper-vsock = { path = "hyper-vsock" }

@@ -1,0 +1,16 @@
+[package]
+name = "test_server"
+version = "0.1.0"
+authors = ["fsyncd"]
+description = "Tokio Virtio socket test server"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+clap = "2.33.0"
+futures = "0.1.29"
+hyper = "0.12.35"
+libc = "0.2.65"
+nix = "0.15.0"
+tokio = "0.1.22"
+tokio-vsock = { path = "../" }
