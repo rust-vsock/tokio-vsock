@@ -23,6 +23,8 @@ use nix::sys::socket::{SockAddr, VsockAddr};
 use std::io;
 use tokio::runtime::Runtime;
 
+mod hyper_vsock;
+
 /// Make a simple GET request over vsock to the test server.
 /// Further testing is required, however this test, combined with the server
 /// hits a surprising number of code paths.

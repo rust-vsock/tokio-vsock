@@ -20,4 +20,3 @@ vsock = "0.1.4"
 
 [dev-dependencies]
 hyper = "0.12.35"
-hyper-vsock = { path = "hyper-vsock", version = "0.1.0" }
