@@ -52,6 +52,7 @@ use tokio::reactor::{Handle, PollEvented2};
 
 use crate::stream::VsockStream;
 
+/// An I/O object representing a Virtio socket listening for incoming connections.
 #[derive(Debug)]
 pub struct VsockListener {
     io: PollEvented2<super::mio::VsockListener>,
@@ -63,20 +64,25 @@ impl VsockListener {
         Self { io }
     }
 
+    /// Create a new Virtio socket listener associated with this event loop.
     pub fn bind(addr: &SockAddr) -> Result<Self> {
         let l = super::mio::VsockListener::bind(addr)?;
         Ok(Self::new(l))
     }
 
+    /// Attempt to accept a connection and create a new connected socket if
+    /// successful.
     pub fn poll_accept(&mut self) -> Result<Async<(VsockStream, SockAddr)>> {
         let (io, addr) = try_ready!(self.poll_accept_std());
 
-        let io = super::mio::VsockStream::from_std(io);
+        let io = super::mio::VsockStream::from_std(io)?;
         let io = VsockStream::new(io);
 
         Ok((io, addr).into())
     }
 
+    /// Attempt to accept a connection and create a new connected socket if
+    /// successful.
     pub fn poll_accept_std(&mut self) -> Result<Async<(vsock::VsockStream, SockAddr)>> {
         try_ready!(self.io.poll_read_ready(mio::Ready::readable()));
 
@@ -90,16 +96,20 @@ impl VsockListener {
         }
     }
 
+    /// Create a new Virtio socket listener from a blocking listener.
     pub fn from_std(listener: vsock::VsockListener, handle: &Handle) -> Result<Self> {
-        let io = super::mio::VsockListener::from_std(listener);
+        let io = super::mio::VsockListener::from_std(listener)?;
         let io = PollEvented2::new_with_handle(io, handle)?;
         Ok(VsockListener { io })
     }
 
+    /// The local address that this listener is bound to.
     pub fn local_addr(&self) -> Result<SockAddr> {
         self.io.get_ref().local_addr()
     }
 
+    /// Consumes this listener, returning a stream of the sockets this listener
+    /// accepts.
     pub fn incoming(self) -> Incoming {
         Incoming::new(self)
     }
@@ -111,6 +121,7 @@ impl AsRawFd for VsockListener {
     }
 }
 
+/// Stream returned by the `VsockListener::incoming` representing sockets received from a listener.
 #[derive(Debug)]
 pub struct Incoming {
     inner: VsockListener,

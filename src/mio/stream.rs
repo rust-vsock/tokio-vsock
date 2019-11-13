@@ -102,8 +102,9 @@ impl VsockStream {
         })
     }
 
-    pub fn from_std(inner: vsock::VsockStream) -> VsockStream {
-        VsockStream { inner }
+    pub fn from_std(inner: vsock::VsockStream) -> Result<VsockStream> {
+        inner.set_nonblocking(true)?;
+        Ok(VsockStream { inner })
     }
 
     pub fn peer_addr(&self) -> Result<SockAddr> {

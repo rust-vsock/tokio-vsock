@@ -94,8 +94,9 @@ impl VsockListener {
         }
     }
 
-    pub fn from_std(inner: vsock::VsockListener) -> Self {
-        Self { inner }
+    pub fn from_std(inner: vsock::VsockListener) -> Result<Self> {
+        inner.set_nonblocking(true)?;
+        Ok(Self { inner })
     }
 
     pub fn local_addr(&self) -> Result<SockAddr> {

@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-vsock"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -1,6 +1,6 @@
 [package]
 name = "test_server"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["fsyncd"]
 description = "Tokio Virtio socket test server"
 license = "Apache-2.0"

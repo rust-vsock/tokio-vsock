@@ -57,6 +57,7 @@ use tokio::reactor::{Handle, PollEvented2};
 
 use super::iovec::IoVec;
 
+/// An I/O object representing a Virtio socket connected to a remote endpoint.
 #[derive(Debug)]
 pub struct VsockStream {
     io: PollEvented2<super::mio::VsockStream>,
@@ -68,6 +69,7 @@ impl VsockStream {
         Self { io }
     }
 
+    /// Create a new socket connected to the specified address.
     pub fn connect(addr: &SockAddr) -> ConnectFuture {
         use self::ConnectFutureState::*;
         let inner = match super::mio::VsockStream::connect(addr) {
@@ -77,28 +79,34 @@ impl VsockStream {
         ConnectFuture { inner }
     }
 
+    /// Create a new socket from an existing blocking socket.
     pub fn from_std(stream: vsock::VsockStream, handle: &Handle) -> Result<Self> {
-        let io = super::mio::VsockStream::from_std(stream);
+        let io = super::mio::VsockStream::from_std(stream)?;
         let io = PollEvented2::new_with_handle(io, handle)?;
         Ok(VsockStream { io })
     }
 
+    /// Check the socket's read readiness state.
     pub fn poll_read_ready(&self, mask: Ready) -> Result<Async<Ready>> {
         self.io.poll_read_ready(mask)
     }
 
+    /// Check the socket's write readiness state.
     pub fn poll_write_ready(&self) -> Result<Async<Ready>> {
         self.io.poll_write_ready()
     }
 
+    /// The local address that this socket is bound to.
     pub fn local_addr(&self) -> Result<SockAddr> {
         self.io.get_ref().local_addr()
     }
 
+    /// The remote address that this socket is connected to.
     pub fn peer_addr(&self) -> Result<SockAddr> {
         self.io.get_ref().peer_addr()
     }
 
+    /// Shuts down the read, write, or both halves of this connection.
     pub fn shutdown(&self, how: Shutdown) -> Result<()> {
         self.io.get_ref().shutdown(how)
     }
@@ -256,6 +264,8 @@ impl AsyncRead for &VsockStream {
     }
 }
 
+/// Future returned by `VsockStream::connect` which will resolve to a `VsockStream`
+/// when the stream is connected.
 #[derive(Debug)]
 pub struct ConnectFuture {
     inner: ConnectFutureState,

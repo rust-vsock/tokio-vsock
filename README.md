@@ -1,15 +1,20 @@
-# Tokio-vsock
+# tokio-vsock
 
 Asynchronous Virtio socket support for Rust. The implementation is 
-based off of Tokio and Mio's TCPListener and TCPStream interfaces.
+based off of Tokio and Mio's `TCPListener` and `TCPStream` interfaces.
 
-Tokio-vsock is for the most part pre-alpha quality, so there is probably 
-sharp edges. Please test it thoroughly before using in production. Happy to receive
-pull requests and issues.
+tokio-vsock is for the most part **pre-alpha** quality, so there are probably 
+**sharp edges**. Please test it thoroughly before using in production. Happy to receive
+pull requests and issue reports.
+
+## Use Cases
+
+The most common use case for tokio-vsock would be writing agents for microvm
+applications. Examples would include container runtimes.
 
 ## Usage
 
-Refer to the crate documentation.
+Refer to the crate [documentation](https://docs.rs/tokio-vsock/).
 
 ## Testing
 
