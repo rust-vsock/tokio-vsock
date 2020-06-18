@@ -37,11 +37,9 @@
  * limitations under the License.
  */
 
-use std::io::{Error, ErrorKind, Result};
-use std::mem::size_of;
+use std::io::Result;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
-use libc::*;
 use mio::unix::EventedFd;
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 use nix::sys::socket::SockAddr;
@@ -53,45 +51,10 @@ pub struct VsockListener {
 
 impl VsockListener {
     pub fn bind(addr: &SockAddr) -> Result<Self> {
-        let mut vsock_addr = if let SockAddr::Vsock(addr) = addr {
-            addr.0
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "requires a virtio socket address",
-            ));
-        };
-
-        let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM, 0) };
-        if socket < 0 {
-            return Err(Error::last_os_error());
-        }
-
-        if unsafe { fcntl(socket, F_SETFL, O_NONBLOCK) } < 0 {
-            let _ = unsafe { close(socket) };
-            return Err(Error::last_os_error());
-        }
-
-        let res = unsafe {
-            bind(
-                socket,
-                &mut vsock_addr as *mut _ as *mut sockaddr,
-                size_of::<sockaddr_vm>() as u32,
-            )
-        };
-        if res < 0 {
-            let _ = unsafe { close(socket) };
-            return Err(Error::last_os_error());
-        }
-
-        if unsafe { listen(socket, 1024) } < 0 {
-            let _ = unsafe { close(socket) };
-            Err(Error::last_os_error())
-        } else {
-            Ok(Self {
-                inner: unsafe { vsock::VsockListener::from_raw_fd(socket) },
-            })
-        }
+        let vsock_listener = vsock::VsockListener::bind(addr)?;
+        Ok(Self {
+            inner: vsock_listener,
+        })
     }
 
     pub fn from_std(inner: vsock::VsockListener) -> Result<Self> {
