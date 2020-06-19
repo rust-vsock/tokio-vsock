@@ -16,9 +16,9 @@ libc = "0.2.71"
 mio = "0.6.20"
 nix = "0.17.0"
 vsock = "0.2.0"
-tokio = { version = "0.2", features = ["io-driver", "stream", "macros", "rt-threaded", ] }
+tokio = { version = "0.2", features = ["io-driver", "stream", "macros", "rt-threaded"] }
 
 [dev-dependencies]
-hyper = "0.12.35"
 sha2 = "0.9.0"
 rand = "0.7.3"
+tokio = { version = "0.2", features = ["io-driver", "stream", "macros", "rt-threaded", "io-util"] }
