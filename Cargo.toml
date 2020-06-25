@@ -1,6 +1,6 @@
 [package]
 name = "tokio-vsock"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["fsyncd"]
 description = "Asynchronous Virtio socket support for Rust"
 repository = "https://github.com/fsyncd/tokio-vsock"
@@ -15,7 +15,7 @@ iovec = "0.1.4"
 libc = "0.2.71"
 mio = "0.6.20"
 nix = "0.17.0"
-vsock = "0.2.0"
+vsock = "0.2.1"
 tokio = { version = "0.2", features = ["io-driver", "stream"] }
 
 [dev-dependencies]
