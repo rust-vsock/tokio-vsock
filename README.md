@@ -43,8 +43,3 @@ Run the test suite with:
 ```
 make check
 ```
-
-## TODO
-
-* More detailed documentation and examples.
-* Further test coverage, including long running tests.

@@ -37,8 +37,11 @@ tokio_vsock: $(SRCS)
 test_server: tokio_vsock test_server/src/main.rs
 	cargo build --manifest-path=test_server/Cargo.toml
 
-# Set reup required host kernel modules
+# Setup required host kernel modules
 kmod:
+	sudo /sbin/modprobe -r vmw_vsock_vmci_transport
+	sudo /sbin/modprobe -r vmw_vsock_virtio_transport_common
+	sudo /sbin/modprobe -r vsock
 	sudo /sbin/modprobe vhost_vsock
 
 # Start a Virtio socket enabled vm
