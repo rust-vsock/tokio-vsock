@@ -15,17 +15,14 @@
  */
 
 use clap::{crate_authors, crate_version, App, Arg};
-use futures::future::{err, ok};
-use futures::{Future, Stream};
-use hyper::server::conn::Http;
-use hyper::service::service_fn_ok;
-use hyper::{Body, Request, Response};
+use futures::StreamExt as _;
 use nix::sys::socket::{SockAddr, VsockAddr};
-use std::io;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_vsock::VsockListener;
 
 /// A simple Virtio socket server that uses Hyper to response to requests.
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), ()> {
     let matches = App::new("test_server")
         .version(crate_version!())
         .author(crate_authors!())
@@ -54,24 +51,32 @@ fn main() {
 
     println!("Listening for connections on port: {}", listen_port);
 
-    let http = Http::new();
+    let mut incoming = listener.incoming();
+    while let Some(result) = incoming.next().await {
+        match result {
+            Ok(mut stream) => {
+                println!("Got connection ============");
+                tokio::spawn(async move {
+                    loop {
+                        let mut buf = vec![0u8; 5000];
+                        let len = stream.read(&mut buf).await.unwrap();
 
-    let task = listener
-        .incoming()
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "accept connection failed"))
-        .for_each(move |stream| {
-            let peer_addr = match stream.peer_addr() {
-                Ok(peer_addr) => peer_addr,
-                Err(e) => return err(e),
-            };
-            println!("Received connection from: {:?}", peer_addr);
-            let service =
-                service_fn_ok(|_: Request<Body>| Response::new(Body::from("Hello World!")));
-            tokio::spawn(http.serve_connection(stream, service).map_err(|e| {
-                panic!("server connection error: {}", e);
-            }));
-            ok(())
-        });
+                        if len == 0 {
+                            break;
+                        }
 
-    tokio::run(task.map_err(|_| ()));
+                        buf.resize(len, 0);
+                        println!("Got data: {:?}", &buf);
+                        stream.write_all(&buf).await.unwrap();
+                    }
+                });
+            }
+            Err(e) => {
+                println!("Got error: {:?}", e);
+                return Err(());
+            }
+        }
+    }
+
+    Ok(())
 }

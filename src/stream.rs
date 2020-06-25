@@ -43,57 +43,54 @@
  * limitations under the License.
  */
 
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{ErrorKind, Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, RawFd};
 
-use bytes::{Buf, BufMut};
-use futures::{Async, Future, Poll};
+use futures::{future::poll_fn, ready};
 use mio::Ready;
 use nix::sys::socket::SockAddr;
-use std::mem;
+use std::mem::MaybeUninit;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::io::PollEvented;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::reactor::{Handle, PollEvented2};
-
-use super::iovec::IoVec;
 
 /// An I/O object representing a Virtio socket connected to a remote endpoint.
 #[derive(Debug)]
 pub struct VsockStream {
-    io: PollEvented2<super::mio::VsockStream>,
+    io: PollEvented<super::mio::VsockStream>,
 }
 
 impl VsockStream {
-    pub(crate) fn new(connected: super::mio::VsockStream) -> Self {
-        let io = PollEvented2::new(connected);
-        Self { io }
+    pub(crate) fn new(connected: super::mio::VsockStream) -> Result<Self> {
+        let io = PollEvented::new(connected)?;
+        Ok(Self { io })
     }
 
-    /// Create a new socket connected to the specified address.
-    pub fn connect(addr: &SockAddr) -> ConnectFuture {
-        use self::ConnectFutureState::*;
-        let inner = match super::mio::VsockStream::connect(addr) {
-            Ok(vsock) => Waiting(Self::new(vsock)),
-            Err(e) => Error(e),
-        };
-        ConnectFuture { inner }
+    pub async fn connect(addr: &SockAddr) -> Result<Self> {
+        let stream = super::mio::VsockStream::connect(addr)?;
+        let stream = Self::new(stream)?;
+
+        poll_fn(|cx| stream.io.poll_write_ready(cx)).await?;
+        Ok(stream)
     }
 
     /// Create a new socket from an existing blocking socket.
-    pub fn from_std(stream: vsock::VsockStream, handle: &Handle) -> Result<Self> {
+    pub fn from_std(stream: vsock::VsockStream) -> Result<Self> {
         let io = super::mio::VsockStream::from_std(stream)?;
-        let io = PollEvented2::new_with_handle(io, handle)?;
+        let io = PollEvented::new(io)?;
         Ok(VsockStream { io })
     }
 
     /// Check the socket's read readiness state.
-    pub fn poll_read_ready(&self, mask: Ready) -> Result<Async<Ready>> {
-        self.io.poll_read_ready(mask)
+    pub fn poll_read_ready(&self, cx: &mut Context, mask: Ready) -> Poll<Result<Ready>> {
+        self.io.poll_read_ready(cx, mask)
     }
 
     /// Check the socket's write readiness state.
-    pub fn poll_write_ready(&self) -> Result<Async<Ready>> {
-        self.io.poll_write_ready()
+    pub fn poll_write_ready(&self, cx: &mut Context) -> Poll<Result<Ready>> {
+        self.io.poll_write_ready(cx)
     }
 
     /// The local address that this socket is bound to.
@@ -110,6 +107,34 @@ impl VsockStream {
     pub fn shutdown(&self, how: Shutdown) -> Result<()> {
         self.io.get_ref().shutdown(how)
     }
+
+    pub(crate) fn poll_write_priv(&self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
+        ready!(self.io.poll_write_ready(cx))?;
+
+        match self.io.get_ref().write(buf) {
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                self.io.clear_write_ready(cx)?;
+                Poll::Pending
+            }
+            x => Poll::Ready(x),
+        }
+    }
+
+    pub(crate) fn poll_read_priv(
+        &self,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<Result<usize>> {
+        ready!(self.io.poll_read_ready(cx, Ready::readable()))?;
+
+        match self.io.get_ref().read(buf) {
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                self.io.clear_read_ready(cx, Ready::readable())?;
+                Poll::Pending
+            }
+            x => Poll::Ready(x),
+        }
+    }
 }
 
 impl AsRawFd for VsockStream {
@@ -120,7 +145,7 @@ impl AsRawFd for VsockStream {
 
 impl Write for VsockStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        <&Self>::write(&mut &*self, buf)
+        self.io.get_ref().write(buf)
     }
 
     fn flush(&mut self) -> Result<()> {
@@ -130,208 +155,35 @@ impl Write for VsockStream {
 
 impl Read for VsockStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        <&Self>::read(&mut &*self, buf)
-    }
-}
-
-impl AsyncWrite for VsockStream {
-    fn shutdown(&mut self) -> Result<Async<()>> {
-        Ok(Async::Ready(()))
-    }
-
-    fn write_buf<B: Buf>(&mut self, buf: &mut B) -> Poll<usize, Error> {
-        <&Self>::write_buf(&mut &*self, buf)
-    }
-}
-
-impl AsyncRead for VsockStream {
-    fn read_buf<B: BufMut>(&mut self, buf: &mut B) -> Poll<usize, Error> {
-        <&Self>::read_buf(&mut &*self, buf)
-    }
-}
-
-impl Write for &VsockStream {
-    fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        self.io.get_ref().write(buf)
-    }
-
-    fn flush(&mut self) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl Read for &VsockStream {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         self.io.get_ref().read(buf)
     }
 }
 
-impl AsyncWrite for &VsockStream {
-    fn shutdown(&mut self) -> Result<Async<()>> {
-        Ok(Async::Ready(()))
+impl AsyncWrite for VsockStream {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
+        self.poll_write_priv(cx, buf)
     }
 
-    fn write_buf<B: Buf>(&mut self, buf: &mut B) -> Poll<usize, Error> {
-        if let Async::NotReady = self.io.poll_write_ready()? {
-            return Ok(Async::NotReady);
-        }
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<()>> {
+        Poll::Ready(Ok(()))
+    }
 
-        let r = {
-            // The `IoVec` type can't have a zero-length size, so create a dummy
-            // version from a 1-length slice which we'll overwrite with the
-            // `bytes_vec` method.
-            static DUMMY: &[u8] = &[0];
-            let iovec = <&IoVec>::from(DUMMY);
-            let mut bufs = [iovec; 64];
-            let n = buf.bytes_vec(&mut bufs);
-            self.io.get_ref().write_bufs(&bufs[..n])
-        };
-        match r {
-            Ok(n) => {
-                buf.advance(n);
-                Ok(Async::Ready(n))
-            }
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_write_ready()?;
-                Ok(Async::NotReady)
-            }
-            Err(e) => Err(e),
-        }
+    fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<()>> {
+        self.shutdown(std::net::Shutdown::Write)?;
+        Poll::Ready(Ok(()))
     }
 }
 
-impl AsyncRead for &VsockStream {
-    fn read_buf<B: BufMut>(&mut self, buf: &mut B) -> Poll<usize, Error> {
-        if let Async::NotReady = self.io.poll_read_ready(mio::Ready::readable())? {
-            return Ok(Async::NotReady);
-        }
-
-        let r = unsafe {
-            // The `IoVec` type can't have a 0-length size, so we create a bunch
-            // of dummy versions on the stack with 1 length which we'll quickly
-            // overwrite.
-            let b1: &mut [u8] = &mut [0];
-            let b2: &mut [u8] = &mut [0];
-            let b3: &mut [u8] = &mut [0];
-            let b4: &mut [u8] = &mut [0];
-            let b5: &mut [u8] = &mut [0];
-            let b6: &mut [u8] = &mut [0];
-            let b7: &mut [u8] = &mut [0];
-            let b8: &mut [u8] = &mut [0];
-            let b9: &mut [u8] = &mut [0];
-            let b10: &mut [u8] = &mut [0];
-            let b11: &mut [u8] = &mut [0];
-            let b12: &mut [u8] = &mut [0];
-            let b13: &mut [u8] = &mut [0];
-            let b14: &mut [u8] = &mut [0];
-            let b15: &mut [u8] = &mut [0];
-            let b16: &mut [u8] = &mut [0];
-            let mut bufs: [&mut IoVec; 16] = [
-                b1.into(),
-                b2.into(),
-                b3.into(),
-                b4.into(),
-                b5.into(),
-                b6.into(),
-                b7.into(),
-                b8.into(),
-                b9.into(),
-                b10.into(),
-                b11.into(),
-                b12.into(),
-                b13.into(),
-                b14.into(),
-                b15.into(),
-                b16.into(),
-            ];
-            let n = buf.bytes_vec_mut(&mut bufs);
-            self.io.get_ref().read_bufs(&mut bufs[..n])
-        };
-
-        match r {
-            Ok(n) => {
-                unsafe {
-                    buf.advance_mut(n);
-                }
-                Ok(Async::Ready(n))
-            }
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_read_ready(mio::Ready::readable())?;
-                Ok(Async::NotReady)
-            }
-            Err(e) => Err(e),
-        }
+impl AsyncRead for VsockStream {
+    unsafe fn prepare_uninitialized_buffer(&self, _: &mut [MaybeUninit<u8>]) -> bool {
+        false
     }
-}
 
-/// Future returned by `VsockStream::connect` which will resolve to a `VsockStream`
-/// when the stream is connected.
-#[derive(Debug)]
-pub struct ConnectFuture {
-    inner: ConnectFutureState,
-}
-
-impl Future for ConnectFuture {
-    type Item = VsockStream;
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<VsockStream, Error> {
-        self.inner.poll()
-    }
-}
-
-#[derive(Debug)]
-enum ConnectFutureState {
-    Waiting(VsockStream),
-    Error(Error),
-    Empty,
-}
-
-impl ConnectFutureState {
-    fn poll_inner<F>(&mut self, f: F) -> Poll<VsockStream, Error>
-    where
-        F: FnOnce(&mut PollEvented2<super::mio::VsockStream>) -> Poll<mio::Ready, Error>,
-    {
-        {
-            let stream = match *self {
-                ConnectFutureState::Waiting(ref mut s) => s,
-                ConnectFutureState::Error(_) => {
-                    let e = match mem::replace(self, ConnectFutureState::Empty) {
-                        ConnectFutureState::Error(e) => e,
-                        _ => panic!(),
-                    };
-                    return Err(e);
-                }
-                ConnectFutureState::Empty => panic!("can't poll vsock stream twice"),
-            };
-
-            // Once we've connected, wait for the stream to be writable as
-            // that's when the actual connection has been initiated. Once we're
-            // writable we check for `take_socket_error` to see if the connect
-            // actually hit an error or not.
-            //
-            // If all that succeeded then we ship everything on up.
-            if let Async::NotReady = f(&mut stream.io)? {
-                return Ok(Async::NotReady);
-            }
-
-            if let Some(e) = stream.io.get_ref().take_error()? {
-                return Err(e);
-            }
-        }
-
-        match mem::replace(self, ConnectFutureState::Empty) {
-            ConnectFutureState::Waiting(stream) => Ok(Async::Ready(stream)),
-            _ => panic!(),
-        }
-    }
-}
-
-impl Future for ConnectFutureState {
-    type Item = VsockStream;
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<VsockStream, Error> {
-        self.poll_inner(|io| io.poll_write_ready())
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<Result<usize>> {
+        self.poll_read_priv(cx, buf)
     }
 }

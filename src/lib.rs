@@ -21,4 +21,4 @@ mod mio;
 mod stream;
 
 pub use listener::{Incoming, VsockListener};
-pub use stream::{ConnectFuture, VsockStream};
+pub use stream::VsockStream;

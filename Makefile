@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
- 
+
 TOOLCHAIN := x86_64-unknown-linux-musl
 VPATH = target/system target/$(TOOLCHAIN)/debug target/$(TOOLCHAIN)/release
 
@@ -23,7 +23,7 @@ ID := $(shell date +%s)
 
 all: tokio_vsock test_server
 
-check: tokio_vsock test_server
+check: tokio_vsock
 	cargo fmt --all -- --check
 	cargo clippy --all-targets --all-features -- -D warnings
 	cargo test --all
@@ -39,10 +39,7 @@ test_server: tokio_vsock test_server/src/main.rs
 
 # Set reup required host kernel modules
 kmod:
-	sudo /sbin/modprobe -r vmw_tokio_vsock_vmci_transport
-	sudo /sbin/modprobe -r vmw_tokio_vsock_virtio_transport_common
-	sudo /sbin/modprobe -r tokio_vsock
-	sudo /sbin/modprobe vhost_tokio_vsock
+	sudo /sbin/modprobe vhost_vsock
 
 # Start a Virtio socket enabled vm
 vm: initrd.cpio

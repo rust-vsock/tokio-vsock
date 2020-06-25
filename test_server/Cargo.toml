@@ -8,9 +8,8 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.0"
-futures = "0.1.29"
-hyper = "0.12.35"
+futures = "0.3.5"
 libc = "0.2.65"
-nix = "0.15.0"
-tokio = "0.1.22"
+nix = "0.17.0"
+tokio = { version = "0.2", features = ["macros", "io-driver", "stream", "rt-threaded", "rt-core", "io-util",] }
 tokio-vsock = { path = "../" }
