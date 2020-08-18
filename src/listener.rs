@@ -44,10 +44,11 @@
  */
 
 use std::io::{ErrorKind, Result};
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use futures::ready;
 use nix::sys::socket::SockAddr;
+use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::PollEvented;
@@ -129,6 +130,14 @@ impl FromRawFd for VsockListener {
 impl AsRawFd for VsockListener {
     fn as_raw_fd(&self) -> RawFd {
         self.io.get_ref().as_raw_fd()
+    }
+}
+
+impl IntoRawFd for VsockListener {
+    fn into_raw_fd(self) -> RawFd {
+        let fd = self.io.get_ref().as_raw_fd();
+        mem::forget(self);
+        fd
     }
 }
 

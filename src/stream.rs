@@ -45,12 +45,12 @@
 
 use std::io::{ErrorKind, Read, Result, Write};
 use std::net::Shutdown;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
 use futures::{future::poll_fn, ready};
 use mio::Ready;
 use nix::sys::socket::SockAddr;
-use std::mem::MaybeUninit;
+use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::PollEvented;
@@ -140,6 +140,14 @@ impl VsockStream {
 impl AsRawFd for VsockStream {
     fn as_raw_fd(&self) -> RawFd {
         self.io.get_ref().as_raw_fd()
+    }
+}
+
+impl IntoRawFd for VsockStream {
+    fn into_raw_fd(self) -> RawFd {
+        let fd = self.io.get_ref().as_raw_fd();
+        mem::forget(self);
+        fd
     }
 }
 
