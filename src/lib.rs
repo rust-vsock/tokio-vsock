@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 
-extern crate iovec;
-
 mod listener;
-mod mio;
 mod stream;
 
 pub use listener::{Incoming, VsockListener};

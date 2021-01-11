@@ -43,45 +43,46 @@
  * limitations under the License.
  */
 
-use std::io::{ErrorKind, Result};
+use std::io::Result;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use futures::ready;
+use futures::stream::Stream;
 use nix::sys::socket::SockAddr;
 use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::io::PollEvented;
-use tokio::stream::Stream;
+use tokio::io::unix::AsyncFd;
 
 use crate::stream::VsockStream;
 
 /// An I/O object representing a Virtio socket listening for incoming connections.
 #[derive(Debug)]
 pub struct VsockListener {
-    io: PollEvented<super::mio::VsockListener>,
+    inner: AsyncFd<vsock::VsockListener>,
 }
 
 impl VsockListener {
-    fn new(listener: super::mio::VsockListener) -> Result<Self> {
-        let io = PollEvented::new(listener)?;
-        Ok(Self { io })
+    fn new(listener: vsock::VsockListener) -> Result<Self> {
+        listener.set_nonblocking(true)?;
+        Ok(Self {
+            inner: AsyncFd::new(listener)?,
+        })
     }
 
     /// Create a new Virtio socket listener associated with this event loop.
     pub fn bind(addr: &SockAddr) -> Result<Self> {
-        let l = super::mio::VsockListener::bind(addr)?;
+        let l = vsock::VsockListener::bind(addr)?;
         Self::new(l)
     }
 
     /// Attempt to accept a connection and create a new connected socket if
     /// successful.
     pub fn poll_accept(&mut self, cx: &mut Context<'_>) -> Poll<Result<(VsockStream, SockAddr)>> {
-        let (io, addr) = ready!(self.poll_accept_std(cx))?;
-        let io = super::mio::VsockStream::from_std(io)?;
-        let io = VsockStream::new(io)?;
+        let (inner, addr) = ready!(self.poll_accept_std(cx))?;
+        let inner = VsockStream::new(inner)?;
 
-        Ok((io, addr)).into()
+        Ok((inner, addr)).into()
     }
 
     /// Attempt to accept a connection and create a new connected socket if
@@ -90,28 +91,20 @@ impl VsockListener {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Result<(vsock::VsockStream, SockAddr)>> {
-        ready!(self.io.poll_read_ready(cx, mio::Ready::readable()))?;
+        loop {
+            let mut guard = ready!(self.inner.poll_read_ready(cx))?;
 
-        match self.io.get_ref().accept_std() {
-            Ok((io, addr)) => Ok((io, addr)).into(),
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_read_ready(cx, mio::Ready::readable())?;
-                Poll::Pending
+            match guard.try_io(|inner| inner.get_ref().accept()) {
+                Ok(Ok((inner, addr))) => return Ok((inner, addr)).into(),
+                Ok(Err(e)) => return Err(e).into(),
+                Err(_would_block) => continue,
             }
-            Err(e) => Err(e).into(),
         }
-    }
-
-    /// Create a new Virtio socket listener from a blocking listener.
-    pub fn from_std(listener: vsock::VsockListener) -> Result<Self> {
-        let io = super::mio::VsockListener::from_std(listener)?;
-        let io = PollEvented::new(io)?;
-        Ok(VsockListener { io })
     }
 
     /// The local address that this listener is bound to.
     pub fn local_addr(&self) -> Result<SockAddr> {
-        self.io.get_ref().local_addr()
+        self.inner.get_ref().local_addr()
     }
 
     /// Consumes this listener, returning a stream of the sockets this listener
@@ -123,19 +116,19 @@ impl VsockListener {
 
 impl FromRawFd for VsockListener {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
-        Self::from_std(vsock::VsockListener::from_raw_fd(fd)).unwrap()
+        Self::new(vsock::VsockListener::from_raw_fd(fd)).unwrap()
     }
 }
 
 impl AsRawFd for VsockListener {
     fn as_raw_fd(&self) -> RawFd {
-        self.io.get_ref().as_raw_fd()
+        self.inner.get_ref().as_raw_fd()
     }
 }
 
 impl IntoRawFd for VsockListener {
     fn into_raw_fd(self) -> RawFd {
-        let fd = self.io.get_ref().as_raw_fd();
+        let fd = self.inner.get_ref().as_raw_fd();
         mem::forget(self);
         fd
     }
