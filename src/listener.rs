@@ -46,15 +46,14 @@
 use std::io::Result;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
-use crate::{SockAddr, VsockAddr};
-use futures::ready;
-use futures::stream::Stream;
+use futures::{future::poll_fn, ready, stream::Stream};
 use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
 use crate::stream::VsockStream;
+use crate::{SockAddr, VsockAddr};
 
 /// An I/O object representing a Virtio socket listening for incoming connections.
 #[derive(Debug)]
@@ -79,6 +78,10 @@ impl VsockListener {
     /// Create a new Virtio socket listener with specified cid and port.
     pub fn bind_with_cid_port(cid: u32, port: u32) -> Result<Self> {
         Self::bind(&SockAddr::Vsock(VsockAddr::new(cid, port)))
+    }
+    /// Accepts a new incoming connection to this listener.
+    pub async fn accept(&mut self) -> Result<(VsockStream, SockAddr)> {
+        poll_fn(|cx| self.poll_accept(cx)).await
     }
 
     /// Attempt to accept a connection and create a new connected socket if
