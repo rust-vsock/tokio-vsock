@@ -46,8 +46,7 @@
 use std::io::Result;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
-use futures::ready;
-use futures::stream::Stream;
+use futures::{future::poll_fn, ready, stream::Stream};
 use nix::sys::socket::SockAddr;
 use std::mem;
 use std::pin::Pin;
@@ -74,6 +73,11 @@ impl VsockListener {
     pub fn bind(addr: &SockAddr) -> Result<Self> {
         let l = vsock::VsockListener::bind(addr)?;
         Self::new(l)
+    }
+
+    /// Accepts a new incoming connection to this listener.
+    pub async fn accept(&mut self) -> Result<(VsockStream, SockAddr)> {
+        poll_fn(|cx| self.poll_accept(cx)).await
     }
 
     /// Attempt to accept a connection and create a new connected socket if
