@@ -43,28 +43,28 @@
  * limitations under the License.
  */
 
-use std::io::{ErrorKind, Result};
+use std::io::Result;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use futures::ready;
+use futures::stream::Stream;
 use nix::sys::socket::SockAddr;
 use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::io::PollEvented;
-use tokio::stream::Stream;
+use tokio::io::unix::AsyncFd;
 
 use crate::stream::VsockStream;
 
 /// An I/O object representing a Virtio socket listening for incoming connections.
 #[derive(Debug)]
 pub struct VsockListener {
-    io: PollEvented<super::mio::VsockListener>,
+    io: AsyncFd<super::mio::VsockListener>,
 }
 
 impl VsockListener {
     fn new(listener: super::mio::VsockListener) -> Result<Self> {
-        let io = PollEvented::new(listener)?;
+        let io = AsyncFd::new(listener)?;
         Ok(Self { io })
     }
 
@@ -90,22 +90,17 @@ impl VsockListener {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Result<(vsock::VsockStream, SockAddr)>> {
-        ready!(self.io.poll_read_ready(cx, mio::Ready::readable()))?;
-
-        match self.io.get_ref().accept_std() {
-            Ok((io, addr)) => Ok((io, addr)).into(),
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_read_ready(cx, mio::Ready::readable())?;
-                Poll::Pending
-            }
-            Err(e) => Err(e).into(),
+        let mut readable = ready!(self.io.poll_read_ready(cx))?;
+        match readable.try_io(|io| io.get_ref().accept_std()) {
+            Ok(res) => res.into(),
+            Err(_) => Poll::Pending,
         }
     }
 
     /// Create a new Virtio socket listener from a blocking listener.
     pub fn from_std(listener: vsock::VsockListener) -> Result<Self> {
         let io = super::mio::VsockListener::from_std(listener)?;
-        let io = PollEvented::new(io)?;
+        let io = AsyncFd::new(io)?;
         Ok(VsockListener { io })
     }
 

@@ -9,16 +9,16 @@ edition = "2018"
 exclude = ["test_fixture"]
 
 [dependencies]
-bytes = "0.4.12"
-futures = "0.3.5"
-iovec = "0.1.4"
-libc = "0.2.71"
-mio = "0.6.20"
-nix = "0.17.0"
-vsock = "0.2.1"
-tokio = { version = "0.2", features = ["io-driver", "stream"] }
+futures      = "0.3"
+iovec        = "0.1"
+libc         = "0.2"
+mio          = "0.6"
+nix          = "0.17"
+vsock        = "0.2"
+tokio        = { version = "1.1", features = ["net"] }
+tokio-stream = "0.1"
 
 [dev-dependencies]
-sha2 = "0.9.0"
-rand = "0.7.3"
-tokio = { version = "0.2", features = ["io-driver", "stream", "macros", "rt-core", "io-util"] }
+sha2 = "0.9"
+rand = "0.8"
+tokio = { version = "1.1", features = ["macros", "rt", "io-util", "net"] }

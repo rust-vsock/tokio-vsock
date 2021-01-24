@@ -43,28 +43,27 @@
  * limitations under the License.
  */
 
-use std::io::{ErrorKind, Read, Result, Write};
+use std::io::{Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
 use futures::{future::poll_fn, ready};
-use mio::Ready;
 use nix::sys::socket::SockAddr;
-use std::mem::{self, MaybeUninit};
+use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::io::PollEvented;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::unix::AsyncFd;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// An I/O object representing a Virtio socket connected to a remote endpoint.
 #[derive(Debug)]
 pub struct VsockStream {
-    io: PollEvented<super::mio::VsockStream>,
+    io: AsyncFd<super::mio::VsockStream>,
 }
 
 impl VsockStream {
     pub(crate) fn new(connected: super::mio::VsockStream) -> Result<Self> {
-        let io = PollEvented::new(connected)?;
+        let io = AsyncFd::new(connected)?;
         Ok(Self { io })
     }
 
@@ -72,25 +71,18 @@ impl VsockStream {
         let stream = super::mio::VsockStream::connect(addr)?;
         let stream = Self::new(stream)?;
 
-        poll_fn(|cx| stream.io.poll_write_ready(cx)).await?;
+        poll_fn(|cx| stream.io.poll_write_ready(cx))
+            .await?
+            .retain_ready();
+
         Ok(stream)
     }
 
     /// Create a new socket from an existing blocking socket.
     pub fn from_std(stream: vsock::VsockStream) -> Result<Self> {
         let io = super::mio::VsockStream::from_std(stream)?;
-        let io = PollEvented::new(io)?;
+        let io = AsyncFd::new(io)?;
         Ok(VsockStream { io })
-    }
-
-    /// Check the socket's read readiness state.
-    pub fn poll_read_ready(&self, cx: &mut Context, mask: Ready) -> Poll<Result<Ready>> {
-        self.io.poll_read_ready(cx, mask)
-    }
-
-    /// Check the socket's write readiness state.
-    pub fn poll_write_ready(&self, cx: &mut Context) -> Poll<Result<Ready>> {
-        self.io.poll_write_ready(cx)
     }
 
     /// The local address that this socket is bound to.
@@ -109,30 +101,22 @@ impl VsockStream {
     }
 
     pub(crate) fn poll_write_priv(&self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
-        ready!(self.io.poll_write_ready(cx))?;
-
-        match self.io.get_ref().write(buf) {
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_write_ready(cx)?;
-                Poll::Pending
-            }
-            x => Poll::Ready(x),
+        let mut writable = ready!(self.io.poll_write_ready(cx))?;
+        match writable.try_io(|io| io.get_ref().write(buf)) {
+            Ok(res) => res.into(),
+            Err(_) => Poll::Pending,
         }
     }
 
     pub(crate) fn poll_read_priv(
         &self,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize>> {
-        ready!(self.io.poll_read_ready(cx, Ready::readable()))?;
-
-        match self.io.get_ref().read(buf) {
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_read_ready(cx, Ready::readable())?;
-                Poll::Pending
-            }
-            x => Poll::Ready(x),
+        buf: &mut ReadBuf,
+    ) -> Poll<Result<()>> {
+        let mut readable = ready!(self.io.poll_read_ready(cx))?;
+        match readable.try_io(|io| io.get_ref().read(buf.initialized_mut())) {
+            Ok(_) => Poll::Ready(Ok(())),
+            Err(_) => Poll::Pending,
         }
     }
 }
@@ -183,15 +167,11 @@ impl AsyncWrite for VsockStream {
 }
 
 impl AsyncRead for VsockStream {
-    unsafe fn prepare_uninitialized_buffer(&self, _: &mut [MaybeUninit<u8>]) -> bool {
-        false
-    }
-
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize>> {
+        buf: &mut ReadBuf,
+    ) -> Poll<Result<()>> {
         self.poll_read_priv(cx, buf)
     }
 }
