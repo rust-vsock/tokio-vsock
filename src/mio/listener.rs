@@ -52,6 +52,7 @@ pub struct VsockListener {
 impl VsockListener {
     pub fn bind(addr: &SockAddr) -> Result<Self> {
         let vsock_listener = vsock::VsockListener::bind(addr)?;
+        vsock_listener.set_nonblocking(true)?;
         Ok(Self {
             inner: vsock_listener,
         })
