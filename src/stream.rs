@@ -111,12 +111,15 @@ impl VsockStream {
     pub(crate) fn poll_write_priv(&self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
         ready!(self.io.poll_write_ready(cx))?;
 
-        match self.io.get_ref().write(buf) {
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_write_ready(cx)?;
-                Poll::Pending
+        loop {
+            match self.io.get_ref().write(buf) {
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                    self.io.clear_write_ready(cx)?;
+                    return Poll::Pending;
+                }
+                Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
+                x => return Poll::Ready(x),
             }
-            x => Poll::Ready(x),
         }
     }
 
@@ -127,12 +130,15 @@ impl VsockStream {
     ) -> Poll<Result<usize>> {
         ready!(self.io.poll_read_ready(cx, Ready::readable()))?;
 
-        match self.io.get_ref().read(buf) {
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_read_ready(cx, Ready::readable())?;
-                Poll::Pending
+        loop {
+            match self.io.get_ref().read(buf) {
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                    self.io.clear_read_ready(cx, Ready::readable())?;
+                    return Poll::Pending;
+                }
+                Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
+                x => return Poll::Ready(x),
             }
-            x => Poll::Ready(x),
         }
     }
 }
