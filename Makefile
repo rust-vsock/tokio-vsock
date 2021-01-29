@@ -21,12 +21,18 @@ ID := $(shell date +%s)
 
 .PHONY: all check clean tokio_vsock kmod vm
 
-all: tokio_vsock test_server
+all: fmt clippy tokio_vsock test_server
 
-check: tokio_vsock
-	cargo fmt --all -- --check
-	cargo clippy --all-targets --all-features -- -D warnings
+check: tokio_vsock test
+
+test:
 	cargo test --all
+
+fmt:
+	cargo fmt --all -- --check
+
+clippy:
+	cargo clippy --all-targets --all-features -- -D warnings
 
 clean:
 	cargo clean
