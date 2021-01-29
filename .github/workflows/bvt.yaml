@@ -1,0 +1,20 @@
+name: BVT
+on: [pull_request]
+jobs:
+  bvt:
+    name: BVT
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: install dependencies
+      run: |
+        rustup target add x86_64-unknown-linux-musl
+        rustup component add rustfmt clippy
+    - name: Format Check
+      run: make fmt
+    - name: Clippy Check
+      run: make clippy
+    - name: Build
+      run: make tokio_vsock
+    - name: Build test_server
+      run: make test_server
