@@ -46,7 +46,7 @@
 use std::io::{ErrorKind, Result};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
-use crate::SockAddr;
+use crate::{SockAddr, VsockAddr};
 use futures::ready;
 use std::mem;
 use std::pin::Pin;
@@ -72,6 +72,11 @@ impl VsockListener {
     pub fn bind(addr: &SockAddr) -> Result<Self> {
         let l = super::mio::VsockListener::bind(addr)?;
         Self::new(l)
+    }
+
+    /// Create a new Virtio socket listener with specified cid and port.
+    pub fn bind_with_cid_port(cid: u32, port: u32) -> Result<Self> {
+        Self::bind(&SockAddr::Vsock(VsockAddr::new(cid, port)))
     }
 
     /// Attempt to accept a connection and create a new connected socket if
