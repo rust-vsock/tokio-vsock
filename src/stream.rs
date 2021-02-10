@@ -47,9 +47,9 @@ use std::io::{ErrorKind, Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
+use crate::SockAddr;
 use futures::{future::poll_fn, ready};
 use mio::Ready;
-use nix::sys::socket::SockAddr;
 use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
 use std::task::{Context, Poll};

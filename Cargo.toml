@@ -16,8 +16,7 @@ futures = "0.3.5"
 iovec = "0.1.4"
 libc = "0.2.79"
 mio = "0.6.20"
-nix = "0.19.1"
-vsock = "0.2.2"
+vsock = "0.2.3"
 tokio = { version = "0.2", features = ["io-driver", "stream"] }
 
 [dev-dependencies]

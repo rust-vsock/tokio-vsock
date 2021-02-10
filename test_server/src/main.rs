@@ -16,9 +16,8 @@
 
 use clap::{crate_authors, crate_version, App, Arg};
 use futures::StreamExt as _;
-use nix::sys::socket::{SockAddr, VsockAddr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_vsock::VsockListener;
+use tokio_vsock::{SockAddr, VsockAddr, VsockListener};
 
 /// A simple Virtio socket server that uses Hyper to response to requests.
 #[tokio::main]

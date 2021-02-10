@@ -46,8 +46,8 @@
 use std::io::{ErrorKind, Result};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
+use crate::SockAddr;
 use futures::ready;
-use nix::sys::socket::SockAddr;
 use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};

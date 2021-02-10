@@ -40,9 +40,9 @@
 use std::io::Result;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
+use crate::SockAddr;
 use mio::unix::EventedFd;
 use mio::{Evented, Poll, PollOpt, Ready, Token};
-use nix::sys::socket::SockAddr;
 
 #[derive(Debug)]
 pub struct VsockListener {

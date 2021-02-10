@@ -43,10 +43,10 @@ use std::mem::size_of;
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
+use crate::SockAddr;
 use libc::*;
 use mio::unix::EventedFd;
 use mio::{Evented, Poll, PollOpt, Ready, Token};
-use nix::sys::socket::SockAddr;
 
 use super::iovec::unix as iovec;
 use super::iovec::IoVec;

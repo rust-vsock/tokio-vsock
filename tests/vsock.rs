@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-use nix::sys::socket::{SockAddr, VsockAddr};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_vsock::VsockStream;
+use tokio_vsock::{SockAddr, VsockAddr, VsockStream};
 
 const TEST_BLOB_SIZE: usize = 100_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
