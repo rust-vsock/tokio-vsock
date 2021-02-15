@@ -1,2 +1,5 @@
 [build]
 target = "x86_64-unknown-linux-musl"
+
+[registries]
+evervault-ev-tokio-vsock = { index = "https://dl.cloudsmith.io/basic/evervault/ev-tokio-vsock/cargo/index.git" }
