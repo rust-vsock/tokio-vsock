@@ -43,7 +43,7 @@
  * limitations under the License.
  */
 
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
@@ -71,15 +71,8 @@ impl VsockStream {
     }
 
     /// Open a connection to a remote host.
-    pub async fn connect(addr: &SockAddr) -> Result<Self> {
-        let vsock_addr = if let SockAddr::Vsock(addr) = addr {
-            addr.0
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "requires a virtio socket address",
-            ));
-        };
+    pub async fn connect(cid: u32, port: u32) -> Result<Self> {
+        let vsock_addr = VsockAddr::new(cid, port);
 
         let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) };
         if socket < 0 {
@@ -121,11 +114,6 @@ impl VsockStream {
                 Err(_would_block) => continue,
             }
         }
-    }
-
-    /// Open a connection to a remote host with specified cid and port.
-    pub async fn connect_with_cid_port(cid: u32, port: u32) -> Result<Self> {
-        Self::connect(&SockAddr::Vsock(VsockAddr::new(cid, port))).await
     }
 
     /// The local address that this socket is bound to.
