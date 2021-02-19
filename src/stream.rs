@@ -47,9 +47,9 @@ use std::io::{ErrorKind, Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
+use crate::{SockAddr, VsockAddr};
 use futures::{future::poll_fn, ready};
 use mio::Ready;
-use nix::sys::socket::SockAddr;
 use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -68,12 +68,18 @@ impl VsockStream {
         Ok(Self { io })
     }
 
+    /// Open a connection to a remote host.
     pub async fn connect(addr: &SockAddr) -> Result<Self> {
         let stream = super::mio::VsockStream::connect(addr)?;
         let stream = Self::new(stream)?;
 
         poll_fn(|cx| stream.io.poll_write_ready(cx)).await?;
         Ok(stream)
+    }
+
+    /// Open a connection to a remote host with specified cid and port.
+    pub async fn connect_with_cid_port(cid: u32, port: u32) -> Result<Self> {
+        Self::connect(&SockAddr::Vsock(VsockAddr::new(cid, port))).await
     }
 
     /// Create a new socket from an existing blocking socket.
