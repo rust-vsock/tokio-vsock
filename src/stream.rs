@@ -43,115 +43,145 @@
  * limitations under the License.
  */
 
-use std::io::{ErrorKind, Read, Result, Write};
+use std::io::{Error, Read, Result, Write};
 use std::net::Shutdown;
-use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use crate::{SockAddr, VsockAddr};
-use futures::{future::poll_fn, ready};
-use mio::Ready;
-use std::mem::{self, MaybeUninit};
+use futures::ready;
+use libc::*;
+use std::mem::{self, size_of};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::io::PollEvented;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::unix::AsyncFd;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// An I/O object representing a Virtio socket connected to a remote endpoint.
 #[derive(Debug)]
 pub struct VsockStream {
-    io: PollEvented<super::mio::VsockStream>,
+    inner: AsyncFd<vsock::VsockStream>,
 }
 
 impl VsockStream {
-    pub(crate) fn new(connected: super::mio::VsockStream) -> Result<Self> {
-        let io = PollEvented::new(connected)?;
-        Ok(Self { io })
+    pub(crate) fn new(connected: vsock::VsockStream) -> Result<Self> {
+        connected.set_nonblocking(true)?;
+        Ok(Self {
+            inner: AsyncFd::new(connected)?,
+        })
     }
 
     /// Open a connection to a remote host.
-    pub async fn connect(addr: &SockAddr) -> Result<Self> {
-        let stream = super::mio::VsockStream::connect(addr)?;
-        let stream = Self::new(stream)?;
+    pub async fn connect(cid: u32, port: u32) -> Result<Self> {
+        let vsock_addr = VsockAddr::new(cid, port);
 
-        poll_fn(|cx| stream.io.poll_write_ready(cx)).await?;
-        Ok(stream)
-    }
+        let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) };
+        if socket < 0 {
+            return Err(Error::last_os_error());
+        }
 
-    /// Open a connection to a remote host with specified cid and port.
-    pub async fn connect_with_cid_port(cid: u32, port: u32) -> Result<Self> {
-        Self::connect(&SockAddr::Vsock(VsockAddr::new(cid, port))).await
-    }
+        if unsafe { fcntl(socket, F_SETFL, O_NONBLOCK) } < 0 {
+            let _ = unsafe { close(socket) };
+            return Err(Error::last_os_error());
+        }
 
-    /// Create a new socket from an existing blocking socket.
-    pub fn from_std(stream: vsock::VsockStream) -> Result<Self> {
-        let io = super::mio::VsockStream::from_std(stream)?;
-        let io = PollEvented::new(io)?;
-        Ok(VsockStream { io })
-    }
+        if unsafe {
+            connect(
+                socket,
+                &vsock_addr as *const _ as *const sockaddr,
+                size_of::<sockaddr_vm>() as u32,
+            )
+        } < 0
+        {
+            let err = Error::last_os_error();
+            if let Some(os_err) = err.raw_os_error() {
+                // Connect hasn't finished, that's fine.
+                if os_err != EINPROGRESS {
+                    // Close the socket if we hit an error, ignoring the error
+                    // from closing since we can't pass back two errors.
+                    let _ = unsafe { close(socket) };
+                    return Err(err);
+                }
+            }
+        }
 
-    /// Check the socket's read readiness state.
-    pub fn poll_read_ready(&self, cx: &mut Context, mask: Ready) -> Poll<Result<Ready>> {
-        self.io.poll_read_ready(cx, mask)
-    }
+        loop {
+            let stream = unsafe { vsock::VsockStream::from_raw_fd(socket) };
+            let stream = Self::new(stream)?;
+            let mut guard = stream.inner.writable().await?;
 
-    /// Check the socket's write readiness state.
-    pub fn poll_write_ready(&self, cx: &mut Context) -> Poll<Result<Ready>> {
-        self.io.poll_write_ready(cx)
+            match guard.try_io(|_| Ok(())) {
+                Ok(_) => return Ok(stream),
+                Err(_would_block) => continue,
+            }
+        }
     }
 
     /// The local address that this socket is bound to.
     pub fn local_addr(&self) -> Result<SockAddr> {
-        self.io.get_ref().local_addr()
+        self.inner.get_ref().local_addr()
     }
 
     /// The remote address that this socket is connected to.
     pub fn peer_addr(&self) -> Result<SockAddr> {
-        self.io.get_ref().peer_addr()
+        self.inner.get_ref().peer_addr()
     }
 
     /// Shuts down the read, write, or both halves of this connection.
     pub fn shutdown(&self, how: Shutdown) -> Result<()> {
-        self.io.get_ref().shutdown(how)
+        self.inner.get_ref().shutdown(how)
     }
 
     pub(crate) fn poll_write_priv(&self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
-        ready!(self.io.poll_write_ready(cx))?;
+        loop {
+            let mut guard = ready!(self.inner.poll_write_ready(cx))?;
 
-        match self.io.get_ref().write(buf) {
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_write_ready(cx)?;
-                Poll::Pending
+            match guard.try_io(|inner| inner.get_ref().write(buf)) {
+                Ok(Ok(n)) => return Ok(n).into(),
+                Ok(Err(e)) => return Err(e).into(),
+                Err(_would_block) => continue,
             }
-            x => Poll::Ready(x),
         }
     }
 
     pub(crate) fn poll_read_priv(
         &self,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize>> {
-        ready!(self.io.poll_read_ready(cx, Ready::readable()))?;
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<Result<()>> {
+        let b;
+        unsafe {
+            b = &mut *(buf.unfilled_mut() as *mut [mem::MaybeUninit<u8>] as *mut [u8]);
+        };
 
-        match self.io.get_ref().read(buf) {
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.io.clear_read_ready(cx, Ready::readable())?;
-                Poll::Pending
+        loop {
+            let mut guard = ready!(self.inner.poll_read_ready(cx))?;
+
+            match guard.try_io(|inner| inner.get_ref().read(b)) {
+                Ok(Ok(n)) => {
+                    unsafe {
+                        buf.assume_init(n);
+                    }
+                    buf.advance(n);
+                    return Ok(()).into();
+                }
+                Ok(Err(e)) => return Err(e).into(),
+                Err(_would_block) => {
+                    continue;
+                }
             }
-            x => Poll::Ready(x),
         }
     }
 }
 
 impl AsRawFd for VsockStream {
     fn as_raw_fd(&self) -> RawFd {
-        self.io.get_ref().as_raw_fd()
+        self.inner.get_ref().as_raw_fd()
     }
 }
 
 impl IntoRawFd for VsockStream {
     fn into_raw_fd(self) -> RawFd {
-        let fd = self.io.get_ref().as_raw_fd();
+        let fd = self.inner.get_ref().as_raw_fd();
         mem::forget(self);
         fd
     }
@@ -159,7 +189,7 @@ impl IntoRawFd for VsockStream {
 
 impl Write for VsockStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        self.io.get_ref().write(buf)
+        self.inner.get_ref().write(buf)
     }
 
     fn flush(&mut self) -> Result<()> {
@@ -169,7 +199,7 @@ impl Write for VsockStream {
 
 impl Read for VsockStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        self.io.get_ref().read(buf)
+        self.inner.get_ref().read(buf)
     }
 }
 
@@ -189,15 +219,11 @@ impl AsyncWrite for VsockStream {
 }
 
 impl AsyncRead for VsockStream {
-    unsafe fn prepare_uninitialized_buffer(&self, _: &mut [MaybeUninit<u8>]) -> bool {
-        false
-    }
-
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize>> {
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<Result<()>> {
         self.poll_read_priv(cx, buf)
     }
 }

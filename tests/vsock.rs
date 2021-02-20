@@ -17,7 +17,7 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_vsock::{SockAddr, VsockAddr, VsockStream};
+use tokio_vsock::VsockStream;
 
 const TEST_BLOB_SIZE: usize = 100_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
@@ -39,7 +39,7 @@ async fn test_vsock_server() {
     rx_blob.resize(TEST_BLOB_SIZE, 0);
     rng.fill_bytes(&mut blob);
 
-    let mut stream = VsockStream::connect(&SockAddr::Vsock(VsockAddr::new(3, 8000)))
+    let mut stream = VsockStream::connect(3, 8000)
         .await
         .expect("connection failed");
 
