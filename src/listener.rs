@@ -47,13 +47,13 @@ use std::io::Result;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use futures::{future::poll_fn, ready, stream::Stream};
-use nix::sys::socket::SockAddr;
 use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
 use crate::stream::VsockStream;
+use crate::SockAddr;
 
 /// An I/O object representing a Virtio socket listening for incoming connections.
 #[derive(Debug)]
@@ -70,8 +70,8 @@ impl VsockListener {
     }
 
     /// Create a new Virtio socket listener associated with this event loop.
-    pub fn bind(addr: &SockAddr) -> Result<Self> {
-        let l = vsock::VsockListener::bind(addr)?;
+    pub fn bind(cid: u32, port: u32) -> Result<Self> {
+        let l = vsock::VsockListener::bind_with_cid_port(cid, port)?;
         Self::new(l)
     }
 

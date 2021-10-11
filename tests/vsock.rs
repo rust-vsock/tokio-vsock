@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-use nix::sys::socket::{SockAddr, VsockAddr};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -40,7 +39,7 @@ async fn test_vsock_server() {
     rx_blob.resize(TEST_BLOB_SIZE, 0);
     rng.fill_bytes(&mut blob);
 
-    let mut stream = VsockStream::connect(&SockAddr::Vsock(VsockAddr::new(3, 8000)))
+    let mut stream = VsockStream::connect(3, 8000)
         .await
         .expect("connection failed");
 

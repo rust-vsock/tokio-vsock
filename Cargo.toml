@@ -1,7 +1,7 @@
 [package]
 name = "tokio-vsock"
 version = "0.3.1"
-authors = ["fsyncd"]
+authors = ["fsyncd", "rust-vsock"]
 description = "Asynchronous Virtio socket support for Rust"
 repository = "https://github.com/rust-vsock/tokio-vsock"
 homepage = "https://github.com/rust-vsock/tokio-vsock"
@@ -12,13 +12,12 @@ exclude = ["test_fixture"]
 
 [dependencies]
 bytes = "0.4.12"
-futures = "0.3.11"
-libc = "0.2.71"
-nix = "0.20.0"
-vsock = "0.2.2"
-tokio = { version = "1.0.1", features = ["net"] }
+futures = "0.3"
+libc = "0.2.79"
+vsock = "0.2.4"
+tokio = { version = "1", features = ["net"] }
 
 [dev-dependencies]
 sha2 = "0.9.0"
-rand = "0.7.3"
-tokio = { version = "1.0.1", features = ["macros", "rt", "io-util"] }
+rand = "0.8.3"
+tokio = { version = "1", features = ["macros", "rt", "io-util"] }

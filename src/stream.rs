@@ -43,13 +43,13 @@
  * limitations under the License.
  */
 
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
+use crate::{SockAddr, VsockAddr};
 use futures::ready;
 use libc::*;
-use nix::sys::socket::SockAddr;
 use std::mem::{self, size_of};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -70,15 +70,9 @@ impl VsockStream {
         })
     }
 
-    pub async fn connect(addr: &SockAddr) -> Result<Self> {
-        let vsock_addr = if let SockAddr::Vsock(addr) = addr {
-            addr.0
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "requires a virtio socket address",
-            ));
-        };
+    /// Open a connection to a remote host.
+    pub async fn connect(cid: u32, port: u32) -> Result<Self> {
+        let vsock_addr = VsockAddr::new(cid, port);
 
         let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) };
         if socket < 0 {
