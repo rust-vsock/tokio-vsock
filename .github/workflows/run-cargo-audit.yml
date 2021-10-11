@@ -1,0 +1,17 @@
+name: Run Cargo Audit
+
+on:
+  # Scan changed files in PRs, block on new issues only (existing issues ignored)
+  push:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+
+jobs:
+  audit-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
