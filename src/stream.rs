@@ -137,6 +137,7 @@ impl VsockStream {
 
             match guard.try_io(|inner| inner.get_ref().write(buf)) {
                 Ok(Ok(n)) => return Ok(n).into(),
+                Ok(Err(ref e)) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                 Ok(Err(e)) => return Err(e).into(),
                 Err(_would_block) => continue,
             }
@@ -164,6 +165,7 @@ impl VsockStream {
                     buf.advance(n);
                     return Ok(()).into();
                 }
+                Ok(Err(ref e)) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                 Ok(Err(e)) => return Err(e).into(),
                 Err(_would_block) => {
                     continue;
