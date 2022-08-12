@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-pub mod listener;
-pub mod stream;
+mod listener;
+mod stream;
 
 pub use listener::{Incoming, VsockListener};
 pub use stream::{VsockConnectInfo, VsockStream};
