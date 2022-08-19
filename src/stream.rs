@@ -180,7 +180,7 @@ impl VsockStream {
 ///
 /// See [`Connected`] for more details.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VsockConnectInfo {
     peer_addr: Option<SockAddr>,
 }
