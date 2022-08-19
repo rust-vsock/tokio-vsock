@@ -55,6 +55,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+#[cfg(feature = "tonic-conn")]
 use tonic::transport::server::Connected;
 
 /// An I/O object representing a Virtio socket connected to a remote endpoint.
@@ -180,11 +181,13 @@ impl VsockStream {
 ///
 /// See [`Connected`] for more details.
 ///
+#[cfg(feature = "tonic-conn")]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VsockConnectInfo {
     peer_addr: Option<SockAddr>,
 }
 
+#[cfg(feature = "tonic-conn")]
 impl VsockConnectInfo {
     /// Return the remote address the IO resource is connected too.
     pub fn peer_addr(&self) -> Option<SockAddr> {
@@ -192,6 +195,9 @@ impl VsockConnectInfo {
     }
 }
 
+/// Allow consumers of VsockStream to check that it is connected and valid before use.
+///
+#[cfg(feature = "tonic-conn")]
 impl Connected for VsockStream {
     type ConnectInfo = VsockConnectInfo;
 

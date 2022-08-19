@@ -18,5 +18,7 @@ mod listener;
 mod stream;
 
 pub use listener::{Incoming, VsockListener};
-pub use stream::{VsockConnectInfo, VsockStream};
+#[cfg(feature = "tonic-conn")]
+pub use stream::VsockConnectInfo;
+pub use stream::VsockStream;
 pub use vsock::{SockAddr, VsockAddr};
