@@ -11,7 +11,7 @@ edition = "2018"
 exclude = ["test_fixture"]
 
 [features]
-tonic-conn = ["dep:tonic"]
+tonic-conn = ["tonic"]
 
 [dependencies]
 bytes = "0.4.12"
