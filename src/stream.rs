@@ -66,7 +66,7 @@ pub struct VsockStream {
 }
 
 impl VsockStream {
-    pub(crate) fn new(connected: vsock::VsockStream) -> Result<Self> {
+    pub fn new(connected: vsock::VsockStream) -> Result<Self> {
         connected.set_nonblocking(true)?;
         Ok(Self {
             inner: AsyncFd::new(connected)?,
