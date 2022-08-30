@@ -14,13 +14,18 @@
  * limitations under the License.
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 mod listener;
 mod split;
 mod stream;
+#[cfg(feature = "tonic-conn")]
+mod tonic_support;
 
 pub use listener::{Incoming, VsockListener};
 pub use split::{ReadHalf, WriteHalf};
-#[cfg(feature = "tonic-conn")]
-pub use stream::VsockConnectInfo;
 pub use stream::VsockStream;
+#[cfg(feature = "tonic-conn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tonic-conn")))]
+pub use tonic_support::VsockConnectInfo;
 pub use vsock::{SockAddr, VsockAddr};
