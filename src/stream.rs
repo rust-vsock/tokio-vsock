@@ -47,6 +47,7 @@ use std::io::{Error, Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
+use crate::split::{split as new_split, ReadHalf, WriteHalf};
 use crate::{SockAddr, VsockAddr};
 use futures::ready;
 use libc::*;
@@ -65,7 +66,7 @@ pub struct VsockStream {
 }
 
 impl VsockStream {
-    pub(crate) fn new(connected: vsock::VsockStream) -> Result<Self> {
+    pub fn new(connected: vsock::VsockStream) -> Result<Self> {
         connected.set_nonblocking(true)?;
         Ok(Self {
             inner: AsyncFd::new(connected)?,
@@ -131,6 +132,15 @@ impl VsockStream {
     /// Shuts down the read, write, or both halves of this connection.
     pub fn shutdown(&self, how: Shutdown) -> Result<()> {
         self.inner.get_ref().shutdown(how)
+    }
+
+    /// Splits a single value implementing `AsyncRead + AsyncWrite` into separate
+    /// `AsyncRead` and `AsyncWrite` handles.
+    ///
+    /// To restore this read/write object from its `ReadHalf` and
+    /// `WriteHalf` use [`unsplit`](ReadHalf::unsplit()).
+    pub fn split(self) -> (ReadHalf, WriteHalf) {
+        new_split(self)
     }
 
     pub(crate) fn poll_write_priv(&self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {

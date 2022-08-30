@@ -15,9 +15,11 @@
  */
 
 mod listener;
+mod split;
 mod stream;
 
 pub use listener::{Incoming, VsockListener};
+pub use split::{ReadHalf, WriteHalf};
 #[cfg(feature = "tonic-conn")]
 pub use stream::VsockConnectInfo;
 pub use stream::VsockStream;
