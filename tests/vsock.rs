@@ -72,3 +72,16 @@ async fn test_vsock_server() {
 
     assert_eq!(expected, actual);
 }
+
+#[tokio::test]
+async fn test_vsock_conn_error() {
+    let err = VsockStream::connect(3, 8001)
+        .await
+        .expect_err("connection succeeded")
+        .raw_os_error()
+        .expect("not an OS error");
+
+    if err == 0 {
+        panic!("non-zero error expected");
+    }
+}
