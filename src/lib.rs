@@ -28,4 +28,4 @@ pub use stream::VsockStream;
 #[cfg(feature = "tonic-conn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tonic-conn")))]
 pub use tonic_support::VsockConnectInfo;
-pub use vsock::{SockAddr, VsockAddr};
+pub use vsock::VsockAddr;

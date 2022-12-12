@@ -1,6 +1,6 @@
 use tonic::transport::server::Connected;
 
-use crate::{SockAddr, VsockStream};
+use crate::{VsockAddr, VsockStream};
 
 /// Connection info for a Vsock Stream.
 ///
@@ -9,13 +9,13 @@ use crate::{SockAddr, VsockStream};
 #[cfg_attr(docsrs, doc(cfg(feature = "tonic-conn")))]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VsockConnectInfo {
-    peer_addr: Option<SockAddr>,
+    peer_addr: Option<VsockAddr>,
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "tonic-conn")))]
 impl VsockConnectInfo {
     /// Return the remote address the IO resource is connected too.
-    pub fn peer_addr(&self) -> Option<SockAddr> {
+    pub fn peer_addr(&self) -> Option<VsockAddr> {
         self.peer_addr
     }
 }
