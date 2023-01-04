@@ -53,7 +53,7 @@ use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
 use crate::stream::VsockStream;
-use crate::SockAddr;
+use crate::VsockAddr;
 
 /// An I/O object representing a Virtio socket listening for incoming connections.
 #[derive(Debug)]
@@ -76,13 +76,13 @@ impl VsockListener {
     }
 
     /// Accepts a new incoming connection to this listener.
-    pub async fn accept(&mut self) -> Result<(VsockStream, SockAddr)> {
+    pub async fn accept(&mut self) -> Result<(VsockStream, VsockAddr)> {
         poll_fn(|cx| self.poll_accept(cx)).await
     }
 
     /// Attempt to accept a connection and create a new connected socket if
     /// successful.
-    pub fn poll_accept(&mut self, cx: &mut Context<'_>) -> Poll<Result<(VsockStream, SockAddr)>> {
+    pub fn poll_accept(&mut self, cx: &mut Context<'_>) -> Poll<Result<(VsockStream, VsockAddr)>> {
         let (inner, addr) = ready!(self.poll_accept_std(cx))?;
         let inner = VsockStream::new(inner)?;
 
@@ -94,7 +94,7 @@ impl VsockListener {
     pub fn poll_accept_std(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<(vsock::VsockStream, SockAddr)>> {
+    ) -> Poll<Result<(vsock::VsockStream, VsockAddr)>> {
         loop {
             let mut guard = ready!(self.inner.poll_read_ready(cx))?;
 
@@ -109,7 +109,7 @@ impl VsockListener {
     }
 
     /// The local address that this listener is bound to.
-    pub fn local_addr(&self) -> Result<SockAddr> {
+    pub fn local_addr(&self) -> Result<VsockAddr> {
         self.inner.get_ref().local_addr()
     }
 

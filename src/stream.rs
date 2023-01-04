@@ -48,7 +48,7 @@ use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use crate::split::{split as new_split, ReadHalf, WriteHalf};
-use crate::{SockAddr, VsockAddr};
+use crate::VsockAddr;
 use futures::ready;
 use libc::*;
 use std::mem::{self, size_of};
@@ -142,12 +142,12 @@ impl VsockStream {
     }
 
     /// The local address that this socket is bound to.
-    pub fn local_addr(&self) -> Result<SockAddr> {
+    pub fn local_addr(&self) -> Result<VsockAddr> {
         self.inner.get_ref().local_addr()
     }
 
     /// The remote address that this socket is connected to.
-    pub fn peer_addr(&self) -> Result<SockAddr> {
+    pub fn peer_addr(&self) -> Result<VsockAddr> {
         self.inner.get_ref().peer_addr()
     }
 
