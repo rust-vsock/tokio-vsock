@@ -89,7 +89,7 @@ impl VsockStream {
             connect(
                 socket,
                 &vsock_addr as *const _ as *const sockaddr,
-                size_of::<sockaddr_vm>() as u32,
+                size_of::<sockaddr_vm>() as socklen_t,
             )
         } < 0
         {
