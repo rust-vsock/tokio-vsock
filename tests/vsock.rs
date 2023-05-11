@@ -17,7 +17,7 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_vsock::VsockStream;
+use tokio_vsock::{VsockListener, VsockStream};
 
 const TEST_BLOB_SIZE: usize = 100_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
@@ -84,4 +84,109 @@ async fn test_vsock_conn_error() {
     if err == 0 {
         panic!("non-zero error expected");
     }
+}
+
+/// This test was taken from tokio/tests/tcp_split.rs and adapted to fit the Vsock API
+///
+/// source: https://github.com/tokio-rs/tokio/blob/fc9518b62714daac9a38b46c698b94ac5d5b1ca2/tokio/tests/tcp_split.rs
+#[tokio::test]
+async fn split_vsock() {
+    const MSG: &[u8] = b"split";
+    const PORT: u32 = 8002;
+
+    let mut listener =
+        VsockListener::bind(tokio_vsock::VMADDR_CID_LOCAL, PORT).expect("connection failed");
+
+    let handle = tokio::task::spawn(async move {
+        let (mut stream, _) = listener
+            .accept()
+            .await
+            .expect("failed to accept connection");
+        stream
+            .write_all(MSG)
+            .await
+            .expect("failed to write to vsock from task");
+
+        let mut read_buf = [0u8; 32];
+        let read_len = stream
+            .read(&mut read_buf)
+            .await
+            .expect("failed to read data");
+        assert_eq!(&read_buf[..read_len], MSG);
+    });
+
+    let mut stream = VsockStream::connect(tokio_vsock::VMADDR_CID_LOCAL, PORT)
+        .await
+        .expect("connection failed");
+    let (mut read_half, mut write_half) = stream.split();
+
+    let mut read_buf = [0u8; 32];
+    let read_len = read_half
+        .read(&mut read_buf[..])
+        .await
+        .expect("failed to read from vsock");
+    assert_eq!(&read_buf[..read_len], MSG);
+
+    assert_eq!(
+        write_half
+            .write(MSG)
+            .await
+            .expect("failed to write to vsock"),
+        MSG.len()
+    );
+    handle.await.expect("failed to join task");
+}
+
+/// This test was taken from tokio/tests/tcp_split.rs and adapted to fit the Vsock API
+///
+/// source: https://github.com/tokio-rs/tokio/blob/fc9518b62714daac9a38b46c698b94ac5d5b1ca2/tokio/tests/tcp_split.rs
+#[tokio::test]
+async fn into_split_vsock() {
+    const MSG: &[u8] = b"split";
+    const PORT: u32 = 8001;
+
+    let mut listener =
+        VsockListener::bind(tokio_vsock::VMADDR_CID_LOCAL, PORT).expect("connection failed");
+
+    let handle = tokio::task::spawn(async move {
+        let (mut stream, _) = listener
+            .accept()
+            .await
+            .expect("failed to accept connection");
+        stream
+            .write_all(MSG)
+            .await
+            .expect("failed to write to vsock from task");
+
+        let mut read_buf = [0u8; 32];
+        let read_len = stream
+            .read(&mut read_buf)
+            .await
+            .expect("failed to read data");
+        assert_eq!(&read_buf[..read_len], MSG);
+    });
+
+    let stream = VsockStream::connect(tokio_vsock::VMADDR_CID_LOCAL, PORT)
+        .await
+        .expect("connection failed");
+    let (mut read_half, mut write_half) = stream.into_split();
+
+    let mut read_buf = [0u8; 32];
+    let read_len = read_half
+        .read(&mut read_buf[..])
+        .await
+        .expect("failed to read from vsock");
+    assert_eq!(&read_buf[..read_len], MSG);
+
+    assert_eq!(
+        write_half
+            .write(MSG)
+            .await
+            .expect("failed to write to vsock"),
+        MSG.len()
+    );
+    handle.await.expect("failed to join task");
+
+    // Assert that the halfs can be merged together again
+    let _ = read_half.unsplit(write_half);
 }
