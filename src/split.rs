@@ -17,29 +17,74 @@ use std::sync::atomic::Ordering::{Acquire, Release};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-/// The readable half of a value returned from [`split`](split()).
-pub struct ReadHalf {
-    inner: Arc<Inner>,
+/// Splits a ``VsockStream`` into a readable half and a writeable half
+pub fn split(stream: &mut VsockStream) -> (ReadHalf<'_>, WriteHalf<'_>) {
+    // Safety: we have an exclusive reference to the stream so we can safely get a readonly and
+    // write only reference to it.
+    (ReadHalf(stream), WriteHalf(stream))
 }
+
+/// The readable half of a value returned from [`split`](split()).
+pub struct ReadHalf<'a>(&'a VsockStream);
 
 /// The writable half of a value returned from [`split`](split()).
-pub struct WriteHalf {
-    inner: Arc<Inner>,
+pub struct WriteHalf<'a>(&'a VsockStream);
+
+impl AsyncRead for ReadHalf<'_> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        self.0.poll_read_priv(cx, buf)
+    }
 }
 
-pub fn split(stream: VsockStream) -> (ReadHalf, WriteHalf) {
+impl AsyncWrite for WriteHalf<'_> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        self.0.poll_write_priv(cx, buf)
+    }
+
+    #[inline]
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        // Not buffered so flush is a No-op
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        // TODO: This could maybe block?
+        self.0.shutdown(std::net::Shutdown::Write)?;
+        Poll::Ready(Ok(()))
+    }
+}
+
+pub fn split_owned(stream: VsockStream) -> (OwnedReadHalf, OwnedWriteHalf) {
     let inner = Arc::new(Inner {
         locked: AtomicBool::new(false),
         stream: UnsafeCell::new(stream),
     });
 
-    let rd = ReadHalf {
+    let rd = OwnedReadHalf {
         inner: inner.clone(),
     };
 
-    let wr = WriteHalf { inner };
+    let wr = OwnedWriteHalf { inner };
 
     (rd, wr)
+}
+
+/// The readable half of a value returned from [`split_owned`](split_owned()).
+pub struct OwnedReadHalf {
+    inner: Arc<Inner>,
+}
+
+/// The writable half of a value returned from [`split_owned`](split_owned()).
+pub struct OwnedWriteHalf {
+    inner: Arc<Inner>,
 }
 
 struct Inner {
@@ -51,10 +96,10 @@ struct Guard<'a> {
     inner: &'a Inner,
 }
 
-impl ReadHalf {
+impl OwnedReadHalf {
     /// Checks if this `ReadHalf` and some `WriteHalf` were split from the same
     /// stream.
-    pub fn is_pair_of(&self, other: &WriteHalf) -> bool {
+    pub fn is_pair_of(&self, other: &OwnedWriteHalf) -> bool {
         other.is_pair_of(self)
     }
 
@@ -67,7 +112,7 @@ impl ReadHalf {
     /// This can be checked ahead of time by comparing the stream ID
     /// of the two halves.
     #[track_caller]
-    pub fn unsplit(self, wr: WriteHalf) -> VsockStream {
+    pub fn unsplit(self, wr: OwnedWriteHalf) -> VsockStream {
         if self.is_pair_of(&wr) {
             drop(wr);
 
@@ -82,15 +127,15 @@ impl ReadHalf {
     }
 }
 
-impl WriteHalf {
+impl OwnedWriteHalf {
     /// Checks if this `WriteHalf` and some `ReadHalf` were split from the same
     /// stream.
-    pub fn is_pair_of(&self, other: &ReadHalf) -> bool {
+    pub fn is_pair_of(&self, other: &OwnedReadHalf) -> bool {
         Arc::ptr_eq(&self.inner, &other.inner)
     }
 }
 
-impl AsyncRead for ReadHalf {
+impl AsyncRead for OwnedReadHalf {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -101,7 +146,7 @@ impl AsyncRead for ReadHalf {
     }
 }
 
-impl AsyncWrite for WriteHalf {
+impl AsyncWrite for OwnedWriteHalf {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -155,19 +200,31 @@ impl Drop for Guard<'_> {
     }
 }
 
-unsafe impl Send for ReadHalf {}
-unsafe impl Send for WriteHalf {}
-unsafe impl Sync for ReadHalf {}
-unsafe impl Sync for WriteHalf {}
+unsafe impl Send for OwnedReadHalf {}
+unsafe impl Send for OwnedWriteHalf {}
+unsafe impl Sync for OwnedReadHalf {}
+unsafe impl Sync for OwnedWriteHalf {}
 
-impl fmt::Debug for ReadHalf {
+impl fmt::Debug for OwnedReadHalf {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("split::ReadHalf").finish()
+        fmt.debug_struct("split::OwnedReadHalf").finish()
     }
 }
 
-impl fmt::Debug for WriteHalf {
+impl fmt::Debug for OwnedWriteHalf {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("split::WriteHalf").finish()
+        fmt.debug_struct("split::OwnedWriteHalf").finish()
+    }
+}
+
+impl fmt::Debug for ReadHalf<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("split::ReadHalf").finish()
+    }
+}
+
+impl fmt::Debug for WriteHalf<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("split::WriteHalf").finish()
     }
 }

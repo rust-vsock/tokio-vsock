@@ -23,7 +23,7 @@ mod stream;
 mod tonic_support;
 
 pub use listener::{Incoming, VsockListener};
-pub use split::{ReadHalf, WriteHalf};
+pub use split::{OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf};
 pub use stream::VsockStream;
 #[cfg(feature = "tonic-conn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tonic-conn")))]

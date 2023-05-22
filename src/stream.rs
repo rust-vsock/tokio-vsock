@@ -47,7 +47,7 @@ use std::io::{Error, Read, Result, Write};
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
-use crate::split::{split as new_split, ReadHalf, WriteHalf};
+use crate::split::{split_owned, OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf};
 use crate::VsockAddr;
 use futures::ready;
 use libc::*;
@@ -158,11 +158,17 @@ impl VsockStream {
 
     /// Splits a single value implementing `AsyncRead + AsyncWrite` into separate
     /// `AsyncRead` and `AsyncWrite` handles.
+    pub fn split(&mut self) -> (ReadHalf<'_>, WriteHalf<'_>) {
+        crate::split::split(self)
+    }
+
+    /// Splits a single value implementing `AsyncRead + AsyncWrite` into separate
+    /// `AsyncRead` and `AsyncWrite` handles.
     ///
-    /// To restore this read/write object from its `ReadHalf` and
-    /// `WriteHalf` use [`unsplit`](ReadHalf::unsplit()).
-    pub fn split(self) -> (ReadHalf, WriteHalf) {
-        new_split(self)
+    /// To restore this read/write object from its `OwnedReadHalf` and
+    /// `OwnedWriteHalf` use [`unsplit`](OwnedReadHalf::unsplit()).
+    pub fn into_split(self) -> (OwnedReadHalf, OwnedWriteHalf) {
+        split_owned(self)
     }
 
     pub(crate) fn poll_write_priv(&self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
