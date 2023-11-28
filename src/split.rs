@@ -8,12 +8,9 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::VsockStream;
 use futures::ready;
-use std::cell::UnsafeCell;
 use std::fmt;
 use std::io;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering::{Acquire, Release};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
@@ -63,10 +60,7 @@ impl AsyncWrite for WriteHalf<'_> {
 }
 
 pub fn split_owned(stream: VsockStream) -> (OwnedReadHalf, OwnedWriteHalf) {
-    let inner = Arc::new(Inner {
-        locked: AtomicBool::new(false),
-        stream: UnsafeCell::new(stream),
-    });
+    let inner = Arc::new(Inner::new(stream));
 
     let rd = OwnedReadHalf {
         inner: inner.clone(),
@@ -87,14 +81,15 @@ pub struct OwnedWriteHalf {
     inner: Arc<Inner>,
 }
 
-struct Inner {
-    locked: AtomicBool,
-    stream: UnsafeCell<VsockStream>,
+struct Inner(tokio::sync::Mutex<VsockStream>);
+
+impl Inner {
+    fn new(stream: VsockStream) -> Self {
+        Self(tokio::sync::Mutex::new(stream))
+    }
 }
 
-struct Guard<'a> {
-    inner: &'a Inner,
-}
+struct Guard<'a>(tokio::sync::MutexGuard<'a, VsockStream>);
 
 impl OwnedReadHalf {
     /// Checks if this `ReadHalf` and some `WriteHalf` were split from the same
@@ -120,7 +115,7 @@ impl OwnedReadHalf {
                 .ok()
                 .expect("`Arc::try_unwrap` failed");
 
-            inner.stream.into_inner()
+            inner.0.into_inner()
         } else {
             panic!("Unrelated `split::Write` passed to `split::Read::unsplit`.")
         }
@@ -169,12 +164,8 @@ impl AsyncWrite for OwnedWriteHalf {
 
 impl Inner {
     fn poll_lock(&self, cx: &mut Context<'_>) -> Poll<Guard<'_>> {
-        if self
-            .locked
-            .compare_exchange(false, true, Acquire, Acquire)
-            .is_ok()
-        {
-            Poll::Ready(Guard { inner: self })
+        if let Ok(guard) = self.0.try_lock() {
+            Poll::Ready(Guard(guard))
         } else {
             // Spin... but investigate a better strategy
 
@@ -190,20 +181,9 @@ impl Guard<'_> {
     fn stream_pin(&mut self) -> Pin<&mut VsockStream> {
         // safety: the stream is pinned in `Arc` and the `Guard` ensures mutual
         // exclusion.
-        unsafe { Pin::new_unchecked(&mut *self.inner.stream.get()) }
+        unsafe { Pin::new_unchecked(&mut *self.0) }
     }
 }
-
-impl Drop for Guard<'_> {
-    fn drop(&mut self) {
-        self.inner.locked.store(false, Release);
-    }
-}
-
-unsafe impl Send for OwnedReadHalf {}
-unsafe impl Send for OwnedWriteHalf {}
-unsafe impl Sync for OwnedReadHalf {}
-unsafe impl Sync for OwnedWriteHalf {}
 
 impl fmt::Debug for OwnedReadHalf {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
