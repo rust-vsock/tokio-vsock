@@ -17,7 +17,7 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_vsock::{VsockListener, VsockStream};
+use tokio_vsock::{VsockAddr, VsockListener, VsockStream};
 
 const TEST_BLOB_SIZE: usize = 100_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
@@ -39,9 +39,8 @@ async fn test_vsock_server() {
     rx_blob.resize(TEST_BLOB_SIZE, 0);
     rng.fill_bytes(&mut blob);
 
-    let mut stream = VsockStream::connect(3, 8000)
-        .await
-        .expect("connection failed");
+    let addr = VsockAddr::new(3, 8000);
+    let mut stream = VsockStream::connect(addr).await.expect("connection failed");
 
     while tx_pos < TEST_BLOB_SIZE {
         let written_bytes = stream
@@ -75,7 +74,8 @@ async fn test_vsock_server() {
 
 #[tokio::test]
 async fn test_vsock_conn_error() {
-    let err = VsockStream::connect(3, 8001)
+    let addr = VsockAddr::new(3, 8001);
+    let err = VsockStream::connect(addr)
         .await
         .expect_err("connection succeeded")
         .raw_os_error()
@@ -94,8 +94,8 @@ async fn split_vsock() {
     const MSG: &[u8] = b"split";
     const PORT: u32 = 8002;
 
-    let mut listener =
-        VsockListener::bind(tokio_vsock::VMADDR_CID_LOCAL, PORT).expect("connection failed");
+    let addr = VsockAddr::new(tokio_vsock::VMADDR_CID_LOCAL, PORT);
+    let mut listener = VsockListener::bind(addr).expect("connection failed");
 
     let handle = tokio::task::spawn(async move {
         let (mut stream, _) = listener
@@ -115,9 +115,7 @@ async fn split_vsock() {
         assert_eq!(&read_buf[..read_len], MSG);
     });
 
-    let mut stream = VsockStream::connect(tokio_vsock::VMADDR_CID_LOCAL, PORT)
-        .await
-        .expect("connection failed");
+    let mut stream = VsockStream::connect(addr).await.expect("connection failed");
     let (mut read_half, mut write_half) = stream.split();
 
     let mut read_buf = [0u8; 32];
@@ -145,8 +143,8 @@ async fn into_split_vsock() {
     const MSG: &[u8] = b"split";
     const PORT: u32 = 8001;
 
-    let mut listener =
-        VsockListener::bind(tokio_vsock::VMADDR_CID_LOCAL, PORT).expect("connection failed");
+    let addr = VsockAddr::new(tokio_vsock::VMADDR_CID_LOCAL, PORT);
+    let mut listener = VsockListener::bind(addr).expect("connection failed");
 
     let handle = tokio::task::spawn(async move {
         let (mut stream, _) = listener
@@ -166,9 +164,7 @@ async fn into_split_vsock() {
         assert_eq!(&read_buf[..read_len], MSG);
     });
 
-    let stream = VsockStream::connect(tokio_vsock::VMADDR_CID_LOCAL, PORT)
-        .await
-        .expect("connection failed");
+    let stream = VsockStream::connect(addr).await.expect("connection failed");
     let (mut read_half, mut write_half) = stream.into_split();
 
     let mut read_buf = [0u8; 32];
