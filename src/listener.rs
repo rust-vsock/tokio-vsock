@@ -70,8 +70,8 @@ impl VsockListener {
     }
 
     /// Create a new Virtio socket listener associated with this event loop.
-    pub fn bind(cid: u32, port: u32) -> Result<Self> {
-        let l = vsock::VsockListener::bind_with_cid_port(cid, port)?;
+    pub fn bind(addr: VsockAddr) -> Result<Self> {
+        let l = vsock::VsockListener::bind_with_cid_port(addr.cid(), addr.port())?;
         Self::new(l)
     }
 

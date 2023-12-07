@@ -17,7 +17,7 @@
 use clap::{crate_authors, crate_version, App, Arg};
 use futures::StreamExt as _;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_vsock::VsockListener;
+use tokio_vsock::{VsockListener, VsockAddr};
 
 /// A simple Virtio socket server that uses Hyper to response to requests.
 #[tokio::main]
@@ -42,8 +42,8 @@ async fn main() -> Result<(), ()> {
         .parse::<u32>()
         .expect("port must be a valid integer");
 
-    let listener = VsockListener::bind(libc::VMADDR_CID_ANY, listen_port)
-        .expect("unable to bind virtio listener");
+    let addr = VsockAddr::new(libc::VMADDR_CID_ANY, listen_port);
+    let listener = VsockListener::bind(addr).expect("unable to bind virtio listener");
 
     println!("Listening for connections on port: {}", listen_port);
 

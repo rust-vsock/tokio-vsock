@@ -72,9 +72,7 @@ impl VsockStream {
     }
 
     /// Open a connection to a remote host.
-    pub async fn connect(cid: u32, port: u32) -> Result<Self> {
-        let vsock_addr = VsockAddr::new(cid, port);
-
+    pub async fn connect(addr: VsockAddr) -> Result<Self> {
         let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) };
         if socket < 0 {
             return Err(Error::last_os_error());
@@ -88,7 +86,7 @@ impl VsockStream {
         if unsafe {
             connect(
                 socket,
-                &vsock_addr as *const _ as *const sockaddr,
+                &addr as *const _ as *const sockaddr,
                 size_of::<sockaddr_vm>() as socklen_t,
             )
         } < 0
