@@ -45,6 +45,7 @@
 
 use std::io::{Error, Read, Result, Write};
 use std::net::Shutdown;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use crate::split::{split_owned, OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf};
@@ -210,6 +211,12 @@ impl VsockStream {
                 }
             }
         }
+    }
+}
+
+impl AsFd for VsockStream {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.inner.get_ref().as_fd()
     }
 }
 
