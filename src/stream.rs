@@ -74,12 +74,12 @@ impl VsockStream {
 
     /// Open a connection to a remote host.
     pub async fn connect(addr: VsockAddr) -> Result<Self> {
-        let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) };
+        let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM, 0) };
         if socket < 0 {
             return Err(Error::last_os_error());
         }
 
-        if unsafe { fcntl(socket, F_SETFL, O_NONBLOCK) } < 0 {
+        if unsafe { fcntl(socket, F_SETFL, O_NONBLOCK | O_CLOEXEC) } < 0 {
             let _ = unsafe { close(socket) };
             return Err(Error::last_os_error());
         }

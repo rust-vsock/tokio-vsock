@@ -17,7 +17,9 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_vsock::{VsockAddr, VsockListener, VsockStream};
+#[cfg(target_os = "linux")]
+use tokio_vsock::VsockListener;
+use tokio_vsock::{VsockAddr, VsockStream};
 
 const TEST_BLOB_SIZE: usize = 100_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
@@ -90,6 +92,7 @@ async fn test_vsock_conn_error() {
 ///
 /// source: https://github.com/tokio-rs/tokio/blob/fc9518b62714daac9a38b46c698b94ac5d5b1ca2/tokio/tests/tcp_split.rs
 #[tokio::test]
+#[cfg(target_os = "linux")]
 async fn split_vsock() {
     const MSG: &[u8] = b"split";
     const PORT: u32 = 8002;
@@ -139,6 +142,7 @@ async fn split_vsock() {
 ///
 /// source: https://github.com/tokio-rs/tokio/blob/fc9518b62714daac9a38b46c698b94ac5d5b1ca2/tokio/tests/tcp_split.rs
 #[tokio::test]
+#[cfg(target_os = "linux")]
 async fn into_split_vsock() {
     const MSG: &[u8] = b"split";
     const PORT: u32 = 8001;

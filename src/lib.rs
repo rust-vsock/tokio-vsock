@@ -28,6 +28,6 @@ pub use stream::VsockStream;
 #[cfg(feature = "tonic-conn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tonic-conn")))]
 pub use tonic_support::VsockConnectInfo;
-pub use vsock::{
-    VsockAddr, VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL,
-};
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub use vsock::VMADDR_CID_LOCAL;
+pub use vsock::{VsockAddr, VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR};
