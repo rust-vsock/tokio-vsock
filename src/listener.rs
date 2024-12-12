@@ -77,13 +77,13 @@ impl VsockListener {
     }
 
     /// Accepts a new incoming connection to this listener.
-    pub async fn accept(&mut self) -> Result<(VsockStream, VsockAddr)> {
+    pub async fn accept(&self) -> Result<(VsockStream, VsockAddr)> {
         poll_fn(|cx| self.poll_accept(cx)).await
     }
 
     /// Attempt to accept a connection and create a new connected socket if
     /// successful.
-    pub fn poll_accept(&mut self, cx: &mut Context<'_>) -> Poll<Result<(VsockStream, VsockAddr)>> {
+    pub fn poll_accept(&self, cx: &mut Context<'_>) -> Poll<Result<(VsockStream, VsockAddr)>> {
         let (inner, addr) = ready!(self.poll_accept_std(cx))?;
         let inner = VsockStream::new(inner)?;
 
@@ -93,7 +93,7 @@ impl VsockListener {
     /// Attempt to accept a connection and create a new connected socket if
     /// successful.
     pub fn poll_accept_std(
-        &mut self,
+        &self,
         cx: &mut Context<'_>,
     ) -> Poll<Result<(vsock::VsockStream, VsockAddr)>> {
         loop {
@@ -162,7 +162,7 @@ impl Incoming {
 impl Stream for Incoming {
     type Item = Result<VsockStream>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let (socket, _) = ready!(self.inner.poll_accept(cx))?;
         Poll::Ready(Some(Ok(socket)))
     }

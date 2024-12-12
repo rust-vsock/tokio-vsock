@@ -98,7 +98,7 @@ async fn split_vsock() {
     const PORT: u32 = 8002;
 
     let addr = VsockAddr::new(tokio_vsock::VMADDR_CID_LOCAL, PORT);
-    let mut listener = VsockListener::bind(addr).expect("connection failed");
+    let listener = VsockListener::bind(addr).expect("connection failed");
 
     let handle = tokio::task::spawn(async move {
         let (mut stream, _) = listener
@@ -148,7 +148,7 @@ async fn into_split_vsock() {
     const PORT: u32 = 8001;
 
     let addr = VsockAddr::new(tokio_vsock::VMADDR_CID_LOCAL, PORT);
-    let mut listener = VsockListener::bind(addr).expect("connection failed");
+    let listener = VsockListener::bind(addr).expect("connection failed");
 
     let handle = tokio::task::spawn(async move {
         let (mut stream, _) = listener
