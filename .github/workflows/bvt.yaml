@@ -2,7 +2,7 @@ name: BVT
 on: [pull_request]
 jobs:
   bvt:
-    name: BVT
+    name: BVT (stable)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -16,5 +16,32 @@ jobs:
       run: make clippy
     - name: Build
       run: make tokio_vsock
+    - name: Build all features
+      run: make tokio_vsock_all_features
     - name: Build test_server
       run: make test_server
+  bvt-nightly:
+    name: BVT (nightly)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: install dependencies
+      run: |
+        rustup default nightly
+        rustup target add x86_64-unknown-linux-musl
+        rustup component add rustfmt clippy
+    - name: Format Check
+      run: make fmt
+    - name: Clippy Check
+      run: make clippy
+    - name: Build
+      run: make tokio_vsock
+    - name: Build all features
+      run: make tokio_vsock_all_features
+    - name: Build test_server
+      run: make test_server
+    - name: Build (min-deps)
+      run: |
+        # we need to select the minimum dependencies so remove previously selected versions
+        rm Cargo.lock
+        make tokio_vsock_min_deps
