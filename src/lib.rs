@@ -19,14 +19,11 @@
 mod listener;
 mod split;
 mod stream;
-#[cfg(feature = "tonic-conn")]
 mod tonic_support;
 
 pub use listener::{Incoming, VsockListener};
 pub use split::{OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf};
 pub use stream::VsockStream;
-#[cfg(feature = "tonic-conn")]
-#[cfg_attr(docsrs, doc(cfg(feature = "tonic-conn")))]
 pub use tonic_support::VsockConnectInfo;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub use vsock::VMADDR_CID_LOCAL;
