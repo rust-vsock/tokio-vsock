@@ -40,6 +40,12 @@ clean:
 tokio_vsock: $(SRCS)
 	cargo build --lib
 
+tokio_vsock_all_features: $(SRCS)
+	cargo build --lib --all-features
+
+tokio_vsock_min_deps: $(SRCS)
+	cargo build --lib --all-features -Z direct-minimal-versions
+
 test_server: tokio_vsock test_server/src/main.rs
 	cargo build --manifest-path=test_server/Cargo.toml
 
