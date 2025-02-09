@@ -16,6 +16,7 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+mod axum_support;
 mod listener;
 mod split;
 mod stream;
