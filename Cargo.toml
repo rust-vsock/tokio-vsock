@@ -1,6 +1,6 @@
 [package]
 name = "tokio-vsock"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["fsyncd", "rust-vsock"]
 description = "Asynchronous Virtio socket support for Rust"
 repository = "https://github.com/rust-vsock/tokio-vsock"
@@ -25,6 +25,10 @@ tonic09 = { package = "tonic", version = "0.9", optional = true }
 tonic010 = { package = "tonic", version = "0.10", optional = true }
 tonic011 = { package = "tonic", version = "0.11", optional = true }
 tonic012 = { package = "tonic", version = "0.12", optional = true }
+axum08 = { package = "axum", version = "0.8", optional = true, default-features = false, features = [
+    "tokio",
+    "http1",
+] }
 
 [dev-dependencies]
 sha2 = "0.10.6"
