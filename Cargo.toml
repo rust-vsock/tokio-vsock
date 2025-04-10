@@ -25,6 +25,7 @@ tonic09 = { package = "tonic", version = "0.9", optional = true }
 tonic010 = { package = "tonic", version = "0.10", optional = true }
 tonic011 = { package = "tonic", version = "0.11", optional = true }
 tonic012 = { package = "tonic", version = "0.12", optional = true }
+tonic013 = { package = "tonic", version = "0.13", optional = true }
 axum08 = { package = "axum", version = "0.8", optional = true, default-features = false, features = [
     "tokio",
     "http1",
