@@ -33,7 +33,7 @@ axum08 = { package = "axum", version = "0.8", optional = true, default-features 
 
 [dev-dependencies]
 sha2 = "0.10.6"
-rand = "0.8.5"
+rand = "0.9.0"
 tokio = { version = "1.34", features = ["macros", "rt", "io-util"] }
 
 [package.metadata.docs.rs]

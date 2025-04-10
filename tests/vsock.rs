@@ -32,7 +32,7 @@ const TEST_BLOCK_SIZE: usize = 5_000;
 /// semantics.
 #[tokio::test]
 async fn test_vsock_server() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut blob: Vec<u8> = vec![];
     let mut rx_blob = vec![];
     let mut tx_pos = 0;
