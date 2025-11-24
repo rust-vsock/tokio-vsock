@@ -5,7 +5,7 @@ jobs:
     name: BVT (stable)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: install dependencies
       run: |
         rustup target add x86_64-unknown-linux-musl
@@ -24,7 +24,7 @@ jobs:
     name: BVT (nightly)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: install dependencies
       run: |
         rustup default nightly
