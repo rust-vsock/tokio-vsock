@@ -79,7 +79,12 @@ impl VsockStream {
             return Err(Error::last_os_error());
         }
 
-        if unsafe { fcntl(socket, F_SETFL, O_NONBLOCK | O_CLOEXEC) } < 0 {
+        if unsafe { fcntl(socket, F_SETFL, O_NONBLOCK) } < 0 {
+            let _ = unsafe { close(socket) };
+            return Err(Error::last_os_error());
+        }
+
+        if unsafe { fcntl(socket, F_SETFD, FD_CLOEXEC) } < 0 {
             let _ = unsafe { close(socket) };
             return Err(Error::last_os_error());
         }
@@ -104,33 +109,37 @@ impl VsockStream {
             }
         }
 
-        loop {
-            let stream = unsafe { vsock::VsockStream::from_raw_fd(socket) };
-            let stream = Self::new(stream)?;
-            let mut guard = stream.inner.writable().await?;
+        let stream = unsafe { vsock::VsockStream::from_raw_fd(socket) };
+        let stream = Self::new(stream)?;
 
-            // Checks if the connection failed or not
-            let conn_check = guard.try_io(|fd| {
-                let mut sock_err: c_int = 0;
-                let mut sock_err_len: socklen_t = size_of::<c_int>() as socklen_t;
-                let err = unsafe {
-                    getsockopt(
-                        fd.as_raw_fd(),
-                        SOL_SOCKET,
-                        SO_ERROR,
-                        &mut sock_err as *mut _ as *mut c_void,
-                        &mut sock_err_len as *mut socklen_t,
-                    )
-                };
-                if err < 0 {
-                    return Err(Error::last_os_error());
-                }
-                if sock_err == 0 {
-                    Ok(())
-                } else {
-                    Err(Error::from_raw_os_error(sock_err))
-                }
-            });
+        loop {
+            // Checks if the connection failed or not.
+            //
+            // Scope the readiness guard tightly so we can return `stream` on success.
+            let conn_check = {
+                let mut guard = stream.inner.writable().await?;
+                guard.try_io(|fd| {
+                    let mut sock_err: c_int = 0;
+                    let mut sock_err_len: socklen_t = size_of::<c_int>() as socklen_t;
+                    let err = unsafe {
+                        getsockopt(
+                            fd.as_raw_fd(),
+                            SOL_SOCKET,
+                            SO_ERROR,
+                            &mut sock_err as *mut _ as *mut c_void,
+                            &mut sock_err_len as *mut socklen_t,
+                        )
+                    };
+                    if err < 0 {
+                        return Err(Error::last_os_error());
+                    }
+                    if sock_err == 0 {
+                        Ok(())
+                    } else {
+                        Err(Error::from_raw_os_error(sock_err))
+                    }
+                })
+            };
 
             match conn_check {
                 Ok(Ok(_)) => return Ok(stream),

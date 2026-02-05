@@ -7,11 +7,9 @@
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::VsockStream;
-use futures::ready;
 use std::fmt;
 use std::io;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 /// Splits a ``VsockStream`` into a readable half and a writeable half
@@ -60,42 +58,25 @@ impl AsyncWrite for WriteHalf<'_> {
 }
 
 pub fn split_owned(stream: VsockStream) -> (OwnedReadHalf, OwnedWriteHalf) {
-    let inner = Arc::new(Inner::new(stream));
-
-    let rd = OwnedReadHalf {
-        inner: inner.clone(),
-    };
-
-    let wr = OwnedWriteHalf { inner };
-
-    (rd, wr)
+    let (rd, wr) = tokio::io::split(stream);
+    (OwnedReadHalf { inner: rd }, OwnedWriteHalf { inner: wr })
 }
 
 /// The readable half of a value returned from [`split_owned`](split_owned()).
 pub struct OwnedReadHalf {
-    inner: Arc<Inner>,
+    inner: tokio::io::ReadHalf<VsockStream>,
 }
 
 /// The writable half of a value returned from [`split_owned`](split_owned()).
 pub struct OwnedWriteHalf {
-    inner: Arc<Inner>,
+    inner: tokio::io::WriteHalf<VsockStream>,
 }
-
-struct Inner(tokio::sync::Mutex<VsockStream>);
-
-impl Inner {
-    fn new(stream: VsockStream) -> Self {
-        Self(tokio::sync::Mutex::new(stream))
-    }
-}
-
-struct Guard<'a>(tokio::sync::MutexGuard<'a, VsockStream>);
 
 impl OwnedReadHalf {
     /// Checks if this `ReadHalf` and some `WriteHalf` were split from the same
     /// stream.
     pub fn is_pair_of(&self, other: &OwnedWriteHalf) -> bool {
-        other.is_pair_of(self)
+        self.inner.is_pair_of(&other.inner)
     }
 
     /// Reunites with a previously split `WriteHalf`.
@@ -108,17 +89,7 @@ impl OwnedReadHalf {
     /// of the two halves.
     #[track_caller]
     pub fn unsplit(self, wr: OwnedWriteHalf) -> VsockStream {
-        if self.is_pair_of(&wr) {
-            drop(wr);
-
-            let inner = Arc::try_unwrap(self.inner)
-                .ok()
-                .expect("`Arc::try_unwrap` failed");
-
-            inner.0.into_inner()
-        } else {
-            panic!("Unrelated `split::Write` passed to `split::Read::unsplit`.")
-        }
+        self.inner.unsplit(wr.inner)
     }
 }
 
@@ -126,62 +97,38 @@ impl OwnedWriteHalf {
     /// Checks if this `WriteHalf` and some `ReadHalf` were split from the same
     /// stream.
     pub fn is_pair_of(&self, other: &OwnedReadHalf) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
+        self.inner.is_pair_of(&other.inner)
     }
 }
 
 impl AsyncRead for OwnedReadHalf {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        let mut inner = ready!(self.inner.poll_lock(cx));
-        inner.stream_pin().poll_read(cx, buf)
+        Pin::new(&mut self.inner).poll_read(cx, buf)
     }
 }
 
 impl AsyncWrite for OwnedWriteHalf {
     fn poll_write(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        let mut inner = ready!(self.inner.poll_lock(cx));
-        inner.stream_pin().poll_write(cx, buf)
+        Pin::new(&mut self.inner).poll_write(cx, buf)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let mut inner = ready!(self.inner.poll_lock(cx));
-        inner.stream_pin().poll_flush(cx)
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let mut inner = ready!(self.inner.poll_lock(cx));
-        inner.stream_pin().poll_shutdown(cx)
-    }
-}
-
-impl Inner {
-    fn poll_lock(&self, cx: &mut Context<'_>) -> Poll<Guard<'_>> {
-        if let Ok(guard) = self.0.try_lock() {
-            Poll::Ready(Guard(guard))
-        } else {
-            // Spin... but investigate a better strategy
-
-            std::thread::yield_now();
-            cx.waker().wake_by_ref();
-
-            Poll::Pending
-        }
-    }
-}
-
-impl Guard<'_> {
-    fn stream_pin(&mut self) -> Pin<&mut VsockStream> {
-        // safety: the stream is pinned in `Arc` and the `Guard` ensures mutual
-        // exclusion.
-        unsafe { Pin::new_unchecked(&mut *self.0) }
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }
 
