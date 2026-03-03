@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use rand::RngCore;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(target_os = "linux")]
