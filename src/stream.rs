@@ -45,7 +45,7 @@
 
 use std::io::{Error, Read, Result, Write};
 use std::net::Shutdown;
-use std::os::fd::{AsFd, BorrowedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use crate::split::{split_owned, OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf};
@@ -240,6 +240,18 @@ impl IntoRawFd for VsockStream {
         let fd = self.inner.get_ref().as_raw_fd();
         mem::forget(self);
         fd
+    }
+}
+
+impl From<OwnedFd> for VsockStream {
+    fn from(fd: OwnedFd) -> Self {
+        Self::new(vsock::VsockStream::from(fd)).unwrap()
+    }
+}
+
+impl From<VsockStream> for OwnedFd {
+    fn from(stream: VsockStream) -> Self {
+        OwnedFd::from(stream.inner.into_inner())
     }
 }
 

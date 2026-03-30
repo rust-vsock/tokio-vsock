@@ -14,7 +14,7 @@ exclude = ["test_fixture"]
 bytes = "1.11.1"
 futures = "0.3.32"
 libc = "0.2.182"
-vsock = "0.5.2"
+vsock = "0.5.4"
 # Keep version in sync with [dev-dependencies]
 tokio = { version = "1.50.0", features = ["net", "sync"] }
 tonic05 = { package = "tonic", version = "0.5", optional = true }

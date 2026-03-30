@@ -44,7 +44,7 @@
  */
 
 use std::io::Result;
-use std::os::fd::{AsFd, BorrowedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use futures::{future::poll_fn, ready, stream::Stream};
@@ -136,6 +136,18 @@ impl FromRawFd for VsockListener {
 impl AsRawFd for VsockListener {
     fn as_raw_fd(&self) -> RawFd {
         self.inner.get_ref().as_raw_fd()
+    }
+}
+
+impl From<OwnedFd> for VsockListener {
+    fn from(fd: OwnedFd) -> Self {
+        Self::new(vsock::VsockListener::from(fd)).unwrap()
+    }
+}
+
+impl From<VsockListener> for OwnedFd {
+    fn from(listener: VsockListener) -> Self {
+        OwnedFd::from(listener.inner.into_inner())
     }
 }
 
