@@ -90,7 +90,9 @@ impl VsockStream {
     pub fn new(connected: vsock::VsockStream) -> Result<Self> {
         connected.set_nonblocking(true)?;
         Ok(Self {
-            inner: AsyncFd::new(connected)?,
+            // SAFETY: The stream owns a stable descriptor, which is not
+            // replaced or closed while registered with AsyncFd.
+            inner: unsafe { AsyncFd::register(connected)? },
         })
     }
 

@@ -66,7 +66,9 @@ impl VsockListener {
     fn new(listener: vsock::VsockListener) -> Result<Self> {
         listener.set_nonblocking(true)?;
         Ok(Self {
-            inner: AsyncFd::new(listener)?,
+            // SAFETY: The listener owns a stable descriptor, which is not
+            // replaced or closed while registered with AsyncFd.
+            inner: unsafe { AsyncFd::register(listener)? },
         })
     }
 
