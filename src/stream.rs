@@ -64,34 +64,49 @@ pub struct VsockStream {
     inner: AsyncFd<vsock::VsockStream>,
 }
 
+fn new_socket(domain: c_int) -> Result<OwnedFd> {
+    let socket_type = SOCK_STREAM;
+    #[cfg(not(target_os = "macos"))]
+    let socket_type = socket_type | SOCK_CLOEXEC;
+
+    // Set close-on-exec atomically where supported to avoid racing with exec.
+    let fd = unsafe { socket(domain, socket_type, 0) };
+    if fd < 0 {
+        return Err(Error::last_os_error());
+    }
+    // SAFETY: socket returned a new descriptor owned by this function.
+    let socket = unsafe { OwnedFd::from_raw_fd(fd) };
+
+    // macOS does not support SOCK_CLOEXEC.
+    #[cfg(target_os = "macos")]
+    if unsafe { fcntl(socket.as_raw_fd(), F_SETFD, FD_CLOEXEC) } < 0 {
+        return Err(Error::last_os_error());
+    }
+
+    Ok(socket)
+}
+
 impl VsockStream {
     pub fn new(connected: vsock::VsockStream) -> Result<Self> {
         connected.set_nonblocking(true)?;
         Ok(Self {
-            inner: AsyncFd::new(connected)?,
+            // SAFETY: The stream owns a stable descriptor, which is not
+            // replaced or closed while registered with AsyncFd.
+            inner: unsafe { AsyncFd::register(connected)? },
         })
     }
 
     /// Open a connection to a remote host.
     pub async fn connect(addr: VsockAddr) -> Result<Self> {
-        let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM, 0) };
-        if socket < 0 {
-            return Err(Error::last_os_error());
-        }
+        let socket = new_socket(AF_VSOCK)?;
 
-        if unsafe { fcntl(socket, F_SETFL, O_NONBLOCK) } < 0 {
-            let _ = unsafe { close(socket) };
-            return Err(Error::last_os_error());
-        }
-
-        if unsafe { fcntl(socket, F_SETFD, FD_CLOEXEC) } < 0 {
-            let _ = unsafe { close(socket) };
+        if unsafe { fcntl(socket.as_raw_fd(), F_SETFL, O_NONBLOCK) } < 0 {
             return Err(Error::last_os_error());
         }
 
         if unsafe {
             connect(
-                socket,
+                socket.as_raw_fd(),
                 &addr as *const _ as *const sockaddr,
                 size_of::<sockaddr_vm>() as socklen_t,
             )
@@ -101,15 +116,12 @@ impl VsockStream {
             if let Some(os_err) = err.raw_os_error() {
                 // Connect hasn't finished, that's fine.
                 if os_err != EINPROGRESS {
-                    // Close the socket if we hit an error, ignoring the error
-                    // from closing since we can't pass back two errors.
-                    let _ = unsafe { close(socket) };
                     return Err(err);
                 }
             }
         }
 
-        let stream = unsafe { vsock::VsockStream::from_raw_fd(socket) };
+        let stream = vsock::VsockStream::from(socket);
         let stream = Self::new(stream)?;
 
         loop {
